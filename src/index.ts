@@ -47,6 +47,8 @@ interface VideoMetadata {
 
 function sanitize(name: string): string {
   return name
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "") // strip accents
     .toLowerCase()
     .replace(/'/g, "")
     .replace(/[<>:"/\\|?*\x00-\x1f]/g, "_")
