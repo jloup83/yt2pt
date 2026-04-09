@@ -61,11 +61,6 @@ function formatDate(yyyymmdd: string): string {
   return `${yyyymmdd.slice(0, 4)}-${yyyymmdd.slice(4, 6)}-${yyyymmdd.slice(6, 8)}`;
 }
 
-function findYtDlp(): string {
-  const binDir = resolve(__dirname, "..", "bin");
-  return join(binDir, "yt-dlp-v2026.03.17");
-}
-
 function run(cmd: string, args: string[]): Promise<{ stdout: string; stderr: string }> {
   return new Promise((resolve, reject) => {
     execFile(cmd, args, { maxBuffer: 50 * 1024 * 1024 }, (error, stdout, stderr) => {
