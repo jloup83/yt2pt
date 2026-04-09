@@ -207,7 +207,7 @@ async function main(): Promise<void> {
   const videoId = meta.id;
 
   const folderName = `${publishedDate}_${videoTitle}_[${videoId}]`;
-  const videoFilename = `${videoTitle}_[${videoId}]`;
+  const videoFilename = `${publishedDate}_${videoTitle}_[${videoId}]`;
 
   const outputDir = resolve("downloads", channelDir, folderName);
   await mkdir(outputDir, { recursive: true });
