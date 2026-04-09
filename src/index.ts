@@ -47,6 +47,8 @@ interface VideoMetadata {
 
 function sanitize(name: string): string {
   return name
+    .toLowerCase()
+    .replace(/'/g, "")
     .replace(/[<>:"/\\|?*\x00-\x1f]/g, "_")
     .replace(/\s+/g, "_")
     .replace(/_+/g, "_")
