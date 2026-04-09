@@ -42,21 +42,21 @@ All downloads are stored under a `downloads/` directory:
 ```
 downloads/
 └── {CHANNEL_NAME}/
-    └── {PUBLISHED_DATE}_{VIDEO_TITLE}_{[VIDEO_ID]}/
+    └── {CHANNEL_NAME}_{PUBLISHED_DATE}_{VIDEO_TITLE}_{[VIDEO_ID]}/
         ├── metadata.json
         ├── thumbnail.jpg
-        └── {VIDEO_TITLE}_{[VIDEO_ID]}.mkv
+        └── {CHANNEL_NAME}_{PUBLISHED_DATE}_{VIDEO_TITLE}_{[VIDEO_ID]}.mkv
 ```
 
 ### Example
 
 ```
 downloads/
-└── Fireship/
-    └── 2024-01-15_God-Tier_Developer_Roadmap_[xTGk_7radyc]/
+└── fireship/
+    └── fireship_2024-01-15_god-tier_developer_roadmap_[xTGk_7radyc]/
         ├── metadata.json
         ├── thumbnail.jpg
-        └── God-Tier_Developer_Roadmap_[xTGk_7radyc].mkv
+        └── fireship_2024-01-15_god-tier_developer_roadmap_[xTGk_7radyc].mkv
 ```
 
 ## metadata.json
