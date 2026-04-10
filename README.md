@@ -146,3 +146,41 @@ downloads/
 | `description` | Video description |
 | `upload_date` | Upload date in UTC (YYYYMMDD) |
 | `thumbnail` | Filename of the thumbnail in the same folder |
+
+## Contributing
+
+### Dev environment setup
+
+```bash
+git clone https://github.com/jloup83/yt2pt.git
+cd yt2pt
+npm install
+npm run build
+```
+
+### Run locally without installing globally
+
+```
+node dist/index.js
+```
+
+### Or install globally as "yt2pt"
+
+```
+npm link
+```
+
+### Branching model
+
+- **`main`** — Release-only branch. Only receives merge PRs for releases (tagged). Never commit directly.
+- **`vX.X.X-beta`** — Milestone dev branches (e.g. `v0.1.0-beta`). All implementation work for a milestone happens here.
+- **Issue branches** — Created off the relevant `vX.X.X-beta` branch, named after the issue (e.g. `17-audit-metadata`), with a PR back into that beta branch.
+
+### Workflow
+
+1. Pick an open issue from a milestone
+2. Create a branch off the corresponding `vX.X.X-beta` branch
+3. Implement, commit (signed commits required), push
+4. Open a PR targeting the `vX.X.X-beta` branch
+5. Integrator reviews and merges
+6. When all milestone issues are done, integrator creates a release PR from `vX.X.X-beta` → `main` with version bump, tag, and release notes
