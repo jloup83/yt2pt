@@ -81,10 +81,24 @@ async function findYtDlpBinary(): Promise<string> {
     throw new Error(`bin/ directory not found at ${binDir}`);
   }
 
+  let platform: string;
+  switch (process.platform) {
+    case "darwin":
+      platform = "macos";
+      break;
+    case "linux":
+      platform = "linux";
+      break;
+    case "win32":
+      throw new Error("Windows is not supported yet");
+    default:
+      throw new Error(`Unsupported platform: ${process.platform}`);
+  }
+
   const entries = await readdir(binDir);
-  const ytdlp = entries.find((f) => f === "yt-dlp" || f.startsWith("yt-dlp-"));
+  const ytdlp = entries.find((f) => f.startsWith(`yt-dlp-${platform}-`));
   if (!ytdlp) {
-    throw new Error(`No yt-dlp binary found in ${binDir}`);
+    throw new Error(`No yt-dlp binary found for ${platform} in ${binDir}`);
   }
   return join(binDir, ytdlp);
 }
