@@ -87,7 +87,7 @@ Given a YouTube URL, yt2pt will:
 
 All downloads are stored under a `downloads/` directory:
 
-```
+```text
 downloads/
 └── {CHANNEL_NAME}/
     └── {CHANNEL_NAME}_{PUBLISHED_DATE}_{VIDEO_TITLE}_{[VIDEO_ID]}/
@@ -98,7 +98,7 @@ downloads/
 
 ### Example
 
-```
+```text
 downloads/
 └── fireship/
     └── fireship_2024-01-15_god-tier_developer_roadmap_[xTGk_7radyc]/
@@ -126,7 +126,7 @@ downloads/
 ```
 
 | Field | Description |
-|-------|-------------|
+| ----- | ----------- |
 | `channel` | Full name of the YouTube channel |
 | `channel_id` | Channel identifier |
 | `channel_url` | URL of the channel |
