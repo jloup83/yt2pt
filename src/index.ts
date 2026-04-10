@@ -17,8 +17,8 @@ Usage:
   yt2pt -v, --version    Show version
 
 Examples:
-  yt2pt https://www.youtube.com/watch?v=xTGk_7radyc
-  yt2pt https://youtu.be/xTGk_7radyc
+  yt2pt https://www.youtube.com/watch?v=q5Mq4kEa7pA
+  yt2pt https://youtu.be/q5Mq4kEa7pA
 `;
 
 const METADATA_FIELDS = [

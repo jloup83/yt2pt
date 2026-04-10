@@ -80,7 +80,7 @@ yt2pt -h
 yt2pt -v
 
 # Download a video
-yt2pt https://www.youtube.com/watch?v=F3fmzCmIJ14
+yt2pt https://www.youtube.com/watch?v=q5Mq4kEa7pA
 ```
 
 ## What it does
@@ -108,27 +108,27 @@ downloads/
 
 ```text
 downloads/
-└── fireship/
-    └── fireship_2024-01-15_god-tier_developer_roadmap_[xTGk_7radyc]/
+└── fatherphi/
+    └── fatherphi_2026-01-29_day_6_maybe_the_chatgpt_limit_really_is_just_200_now_[q5Mq4kEa7pA]/
         ├── metadata.json
         ├── thumbnail.jpg
-        └── fireship_2024-01-15_god-tier_developer_roadmap_[xTGk_7radyc].mkv
+        └── fatherphi_2026-01-29_day_6_maybe_the_chatgpt_limit_really_is_just_200_now_[q5Mq4kEa7pA].mkv
 ```
 
 ## metadata.json
 
 ```json
 {
-  "channel": "Fireship",
-  "channel_id": "UCsBjURrPoezykLs9EqgamOA",
-  "channel_url": "https://www.youtube.com/channel/UCsBjURrPoezykLs9EqgamOA",
-  "id": "xTGk_7radyc",
-  "title": "God-Tier Developer Roadmap",
-  "fulltitle": "God-Tier Developer Roadmap",
+  "channel": "FatherPhi",
+  "channel_id": "UCIw9p-0zI1rEPEs_SS6fDkg",
+  "channel_url": "https://www.youtube.com/channel/UCIw9p-0zI1rEPEs_SS6fDkg",
+  "id": "q5Mq4kEa7pA",
+  "title": "Day 6… 🫩 maybe the #chatgpt limit really is just 200 now",
+  "fulltitle": "Day 6… 🫩 maybe the #chatgpt limit really is just 200 now",
   "ext": "mkv",
   "alt_title": null,
   "description": "...",
-  "upload_date": "20240115",
+  "upload_date": "20260129",
   "thumbnail": "thumbnail.jpg"
 }
 ```
