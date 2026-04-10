@@ -2,16 +2,64 @@
 
 Download YouTube videos with metadata and thumbnails, organized for PeerTube migration.
 
+**Supported platforms:** macOS (Intel & Apple Silicon), Linux (x86_64)
+
 ## Prerequisites
 
 - **Node.js** (v18+)
-- **yt-dlp** binary in the `bin/` directory
+- **ffmpeg** — required by yt-dlp to merge audio + video streams
+
+The yt-dlp binaries for macOS and Linux are bundled in the `bin/` directory.
+
+### macOS
+
+```bash
+# Install Homebrew (if not already installed)
+curl -o- https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh | bash
+
+# Install Node.js and ffmpeg
+brew install node@24 ffmpeg
+
+# Verify
+node -v  # Should print "v24.14.1"
+npm -v   # Should print "11.11.0"
+```
+
+### Linux
+
+```bash
+# Install nvm
+curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.4/install.sh | bash
+
+# Load nvm (in lieu of restarting the shell)
+\. "$HOME/.nvm/nvm.sh"
+
+# Install Node.js
+nvm install 24
+
+# Verify
+node -v  # Should print "v24.14.1"
+npm -v   # Should print "11.11.0"
+
+# Install ffmpeg
+sudo apt install ffmpeg        # Debian/Ubuntu
+# or
+sudo dnf install ffmpeg        # Fedora
+```
 
 ## Setup
 
 ```bash
+git clone https://github.com/jloup83/yt2pt.git
+cd yt2pt
 npm install
 npm run build
+```
+
+### Linux — ensure the binary is executable
+
+```bash
+chmod +x bin/yt-dlp-linux-*
 ```
 
 ## Usage
@@ -24,7 +72,7 @@ node dist/index.js -h
 node dist/index.js -v
 
 # Download a video
-node dist/index.js https://www.youtube.com/watch?v=xTGk_7radyc
+node dist/index.js https://www.youtube.com/watch?v=F3fmzCmIJ14
 ```
 
 ## What it does
