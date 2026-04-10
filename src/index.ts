@@ -1,10 +1,13 @@
 #!/usr/bin/env node
 
 import { execFile } from "node:child_process";
+import { readFileSync } from "node:fs";
 import { mkdir, writeFile, access, readdir } from "node:fs/promises";
 import { join, resolve, extname } from "node:path";
 
-const VERSION = "0.0.1";
+const { version: VERSION } = JSON.parse(
+  readFileSync(resolve(__dirname, "..", "package.json"), "utf-8")
+);
 
 const HELP = `yt2pt v${VERSION} — Download YouTube videos with metadata and thumbnails
 
