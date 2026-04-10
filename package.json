@@ -1,6 +1,6 @@
 {
   "name": "yt2pt",
-  "version": "0.0.1",
+  "version": "0.3.0-beta",
   "description": "Download YouTube videos with metadata and thumbnails for PeerTube migration",
   "main": "dist/index.js",
   "bin": {
