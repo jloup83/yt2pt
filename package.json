@@ -16,7 +16,7 @@
   },
   "keywords": ["youtube", "peertube", "yt-dlp"],
   "author": "Jean-Loup TAILLEFUMIRE",
-  "license": "ISC",
+  "license": "MIT",
   "bugs": {
     "url": "https://github.com/jloup83/yt2pt/issues"
   },
