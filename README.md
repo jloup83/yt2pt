@@ -54,7 +54,15 @@ git clone https://github.com/jloup83/yt2pt.git
 cd yt2pt
 npm install
 npm run build
+npm link
 ```
+
+This creates a global `yt2pt` command you can use from anywhere.
+
+> **Tip:** If tab completion doesn't work right away (typing `yt` + Tab),
+> run `rehash` in your terminal or open a new terminal window.
+
+To remove it later: `npm unlink -g yt2pt`
 
 ### Linux — ensure the binary is executable
 
@@ -66,13 +74,13 @@ chmod +x bin/yt-dlp-linux-*
 
 ```bash
 # Show help
-node dist/index.js -h
+yt2pt -h
 
 # Show version
-node dist/index.js -v
+yt2pt -v
 
 # Download a video
-node dist/index.js https://www.youtube.com/watch?v=F3fmzCmIJ14
+yt2pt https://www.youtube.com/watch?v=F3fmzCmIJ14
 ```
 
 ## What it does
