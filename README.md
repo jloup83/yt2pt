@@ -168,13 +168,13 @@ npm run build
 
 ### Run locally without installing globally
 
-```
+```bash
 node dist/index.js
 ```
 
 ### Or install globally as "yt2pt"
 
-```
+```bash
 npm link
 ```
 
