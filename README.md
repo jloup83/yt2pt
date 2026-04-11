@@ -124,11 +124,15 @@ downloads/
   "channel_url": "https://www.youtube.com/channel/UCIw9p-0zI1rEPEs_SS6fDkg",
   "id": "q5Mq4kEa7pA",
   "title": "Day 6… 🫩 maybe the #chatgpt limit really is just 200 now",
-  "fulltitle": "Day 6… 🫩 maybe the #chatgpt limit really is just 200 now",
   "ext": "mkv",
-  "alt_title": null,
   "description": "...",
   "upload_date": "20260129",
+  "video_url": "https://www.youtube.com/watch?v=q5Mq4kEa7pA",
+  "duration": 195,
+  "duration_string": "3:15",
+  "language": "en",
+  "categories": ["People & Blogs"],
+  "tags": [],
   "thumbnail": "thumbnail.jpg"
 }
 ```
@@ -140,11 +144,15 @@ downloads/
 | `channel_url` | URL of the channel |
 | `id` | YouTube video ID |
 | `title` | Video title |
-| `fulltitle` | Full video title |
 | `ext` | Video file extension |
-| `alt_title` | Secondary title (if any) |
 | `description` | Video description |
 | `upload_date` | Upload date in UTC (YYYYMMDD) |
+| `video_url` | YouTube video URL |
+| `duration` | Video duration in seconds |
+| `duration_string` | Human-readable video duration |
+| `language` | Video language (e.g. `"en"`) |
+| `categories` | YouTube categories |
+| `tags` | YouTube tags |
 | `thumbnail` | Filename of the thumbnail in the same folder |
 
 ## Contributing
