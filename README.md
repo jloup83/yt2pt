@@ -128,10 +128,10 @@ downloads/
   "description": "...",
   "upload_date": "20260129",
   "video_url": "https://www.youtube.com/watch?v=q5Mq4kEa7pA",
-  "duration": 59,
-  "duration_string": "59",
+  "duration": 195,
+  "duration_string": "3:15",
   "language": "en",
-  "categories": ["Entertainment"],
+  "categories": ["People & Blogs"],
   "tags": [],
   "thumbnail": "thumbnail.jpg"
 }
