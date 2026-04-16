@@ -5,10 +5,12 @@ import { Logger } from "./logger";
 // ── Interfaces ──────────────────────────────────────────────────────
 
 interface Yt2ptConfig {
-  downloads_dir: string;
+  data_dir: string;
   log_level: string;
   overwrite_existing: boolean;
   skip_downloaded: boolean;
+  remove_video_after_upload: boolean;
+  remove_video_after_metadata_conversion: boolean;
 }
 
 interface YtdlpConfig {
@@ -39,10 +41,12 @@ export interface Config {
 
 const DEFAULTS: Config = {
   yt2pt: {
-    downloads_dir: "downloads",
+    data_dir: "data",
     log_level: "info",
     overwrite_existing: false,
     skip_downloaded: true,
+    remove_video_after_upload: false,
+    remove_video_after_metadata_conversion: false,
   },
   ytdlp: {
     format: "bv*+ba/b",

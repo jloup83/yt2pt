@@ -334,7 +334,7 @@ async function main(): Promise<void> {
   const folderName = `${channelDir}_${publishedDate}_${videoTitle}_[${videoId}]`;
   const videoFilename = `${channelDir}_${publishedDate}_${videoTitle}_[${videoId}]`;
 
-  const outputDir = resolve(config.yt2pt.downloads_dir, channelDir, folderName);
+  const outputDir = resolve(config.yt2pt.data_dir, channelDir, folderName);
   await mkdir(outputDir, { recursive: true });
   log.debug(`Output directory: ${outputDir}`);
 

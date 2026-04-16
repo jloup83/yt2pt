@@ -63,6 +63,6 @@ export class Logger {
 
 export function createLogger(config: Config): Logger {
   const level = (config.yt2pt.log_level as LogLevel) || "info";
-  const logFile = resolve(config.yt2pt.downloads_dir, "yt2pt.log");
+  const logFile = resolve(config.yt2pt.data_dir, "yt2pt.log");
   return new Logger(level, logFile);
 }
