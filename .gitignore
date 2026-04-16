@@ -3,3 +3,4 @@ dist/
 downloads/
 .DS_Store
 yt2pt.conf.json
+yt2pt.log
