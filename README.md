@@ -54,7 +54,15 @@ git clone https://github.com/jloup83/yt2pt.git
 cd yt2pt
 npm install
 npm run build
+npm link
 ```
+
+This creates a global `yt2pt` command you can use from anywhere.
+
+> **Tip:** If tab completion doesn't work right away (typing `yt` + Tab),
+> run `rehash` in your terminal or open a new terminal window.
+
+To remove it later: `npm unlink -g yt2pt`
 
 ### Linux — ensure the binary is executable
 
@@ -66,13 +74,13 @@ chmod +x bin/yt-dlp-linux-*
 
 ```bash
 # Show help
-node dist/index.js -h
+yt2pt -h
 
 # Show version
-node dist/index.js -v
+yt2pt -v
 
 # Download a video
-node dist/index.js https://www.youtube.com/watch?v=F3fmzCmIJ14
+yt2pt https://www.youtube.com/watch?v=q5Mq4kEa7pA
 ```
 
 ## What it does
@@ -87,7 +95,7 @@ Given a YouTube URL, yt2pt will:
 
 All downloads are stored under a `downloads/` directory:
 
-```
+```text
 downloads/
 └── {CHANNEL_NAME}/
     └── {CHANNEL_NAME}_{PUBLISHED_DATE}_{VIDEO_TITLE}_{[VIDEO_ID]}/
@@ -98,43 +106,89 @@ downloads/
 
 ### Example
 
-```
+```text
 downloads/
-└── fireship/
-    └── fireship_2024-01-15_god-tier_developer_roadmap_[xTGk_7radyc]/
+└── fatherphi/
+    └── fatherphi_2026-01-29_day_6_maybe_the_chatgpt_limit_really_is_just_200_now_[q5Mq4kEa7pA]/
         ├── metadata.json
         ├── thumbnail.jpg
-        └── fireship_2024-01-15_god-tier_developer_roadmap_[xTGk_7radyc].mkv
+        └── fatherphi_2026-01-29_day_6_maybe_the_chatgpt_limit_really_is_just_200_now_[q5Mq4kEa7pA].mkv
 ```
 
 ## metadata.json
 
 ```json
 {
-  "channel": "Fireship",
-  "channel_id": "UCsBjURrPoezykLs9EqgamOA",
-  "channel_url": "https://www.youtube.com/channel/UCsBjURrPoezykLs9EqgamOA",
-  "id": "xTGk_7radyc",
-  "title": "God-Tier Developer Roadmap",
-  "fulltitle": "God-Tier Developer Roadmap",
+  "channel": "FatherPhi",
+  "channel_id": "UCIw9p-0zI1rEPEs_SS6fDkg",
+  "channel_url": "https://www.youtube.com/channel/UCIw9p-0zI1rEPEs_SS6fDkg",
+  "id": "q5Mq4kEa7pA",
+  "title": "Day 6… 🫩 maybe the #chatgpt limit really is just 200 now",
   "ext": "mkv",
-  "alt_title": null,
   "description": "...",
-  "upload_date": "20240115",
+  "upload_date": "20260129",
+  "video_url": "https://www.youtube.com/watch?v=q5Mq4kEa7pA",
+  "duration": 195,
+  "duration_string": "3:15",
+  "language": "en",
+  "categories": ["People & Blogs"],
+  "tags": [],
   "thumbnail": "thumbnail.jpg"
 }
 ```
 
 | Field | Description |
-|-------|-------------|
+| ----- | ----------- |
 | `channel` | Full name of the YouTube channel |
 | `channel_id` | Channel identifier |
 | `channel_url` | URL of the channel |
 | `id` | YouTube video ID |
 | `title` | Video title |
-| `fulltitle` | Full video title |
 | `ext` | Video file extension |
-| `alt_title` | Secondary title (if any) |
 | `description` | Video description |
 | `upload_date` | Upload date in UTC (YYYYMMDD) |
+| `video_url` | YouTube video URL |
+| `duration` | Video duration in seconds |
+| `duration_string` | Human-readable video duration |
+| `language` | Video language (e.g. `"en"`) |
+| `categories` | YouTube categories |
+| `tags` | YouTube tags |
 | `thumbnail` | Filename of the thumbnail in the same folder |
+
+## Contributing
+
+### Dev environment setup
+
+```bash
+git clone https://github.com/jloup83/yt2pt.git
+cd yt2pt
+npm install
+npm run build
+```
+
+### Run locally without installing globally
+
+```bash
+node dist/index.js
+```
+
+### Or install globally as "yt2pt"
+
+```bash
+npm link
+```
+
+### Branching model
+
+- **`main`** — Release-only branch. Only receives merge PRs for releases (tagged). Never commit directly.
+- **`vX.X.X-beta`** — Milestone dev branches (e.g. `v0.1.0-beta`). All implementation work for a milestone happens here.
+- **Issue branches** — Created off the relevant `vX.X.X-beta` branch, named after the issue (e.g. `17-audit-metadata`), with a PR back into that beta branch.
+
+### Workflow
+
+1. Pick an open issue from a milestone
+2. Create a branch off the corresponding `vX.X.X-beta` branch
+3. Implement, commit (signed commits required), push
+4. Open a PR targeting the `vX.X.X-beta` branch
+5. Integrator reviews and merges
+6. When all milestone issues are done, integrator creates a release PR from `vX.X.X-beta` → `main` with version bump, tag, and release notes

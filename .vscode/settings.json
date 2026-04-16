@@ -1,0 +1,7 @@
+{
+  // Treat LICENSE as plain text so the markdown linter
+  // doesn't flag it (VS Code detects it as Markdown by default)
+  "files.associations": {
+    "LICENSE": "plaintext"
+  }
+}

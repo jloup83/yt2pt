@@ -17,8 +17,8 @@ Usage:
   yt2pt -v, --version    Show version
 
 Examples:
-  yt2pt https://www.youtube.com/watch?v=xTGk_7radyc
-  yt2pt https://youtu.be/xTGk_7radyc
+  yt2pt https://www.youtube.com/watch?v=q5Mq4kEa7pA
+  yt2pt https://youtu.be/q5Mq4kEa7pA
 `;
 
 const METADATA_FIELDS = [
@@ -27,11 +27,15 @@ const METADATA_FIELDS = [
   "channel_url",
   "id",
   "title",
-  "fulltitle",
   "ext",
-  "alt_title",
   "description",
   "upload_date",
+  "webpage_url",
+  "duration",
+  "duration_string",
+  "language",
+  "categories",
+  "tags",
 ] as const;
 
 interface VideoMetadata {
@@ -40,11 +44,15 @@ interface VideoMetadata {
   channel_url: string;
   id: string;
   title: string;
-  fulltitle: string;
   ext: string;
-  alt_title: string | null;
   description: string;
   upload_date: string;
+  video_url: string;
+  duration: number | null;
+  duration_string: string | null;
+  language: string | null;
+  categories: string[] | null;
+  tags: string[] | null;
   thumbnail: string;
 }
 
@@ -123,7 +131,11 @@ async function fetchMetadata(ytdlp: string, url: string): Promise<Record<string,
 function buildMetadata(raw: Record<string, unknown>): VideoMetadata {
   const meta: Record<string, unknown> = {};
   for (const field of METADATA_FIELDS) {
-    meta[field] = raw[field] ?? null;
+    if (field === "webpage_url") {
+      meta["video_url"] = raw[field] ?? null;
+    } else {
+      meta[field] = raw[field] ?? null;
+    }
   }
   // thumbnail field will be set after download
   meta["thumbnail"] = "";
