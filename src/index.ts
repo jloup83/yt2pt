@@ -5,6 +5,7 @@ import { readFileSync } from "node:fs";
 import { mkdir, writeFile, access, readdir } from "node:fs/promises";
 import { join, resolve, extname } from "node:path";
 import { loadConfig, printConfig, Config } from "./config";
+import { createLogger, Logger } from "./logger";
 
 const { version: VERSION } = JSON.parse(
   readFileSync(resolve(__dirname, "..", "package.json"), "utf-8")
@@ -209,23 +210,26 @@ async function main(): Promise<void> {
 
   // Load and display configuration
   const { config, overrides } = loadConfig();
-  printConfig(config, overrides);
+  const log = createLogger(config);
+  printConfig(config, overrides, log);
 
   // Find yt-dlp binary
   let ytdlp: string;
   try {
     ytdlp = await findYtDlpBinary();
+    log.debug(`yt-dlp binary: ${ytdlp}`);
   } catch (err) {
-    console.error(`Error: ${(err as Error).message}`);
+    log.error(`${(err as Error).message}`);
     process.exit(1);
   }
 
-  console.log("Fetching video metadata...");
+  log.info("Fetching video metadata...");
   let rawMeta: Record<string, unknown>;
   try {
     rawMeta = await fetchMetadata(ytdlp, url);
+    log.debug(`Raw metadata keys: ${Object.keys(rawMeta).join(", ")}`);
   } catch (err) {
-    console.error(`Error: Failed to fetch metadata. ${(err as Error).message}`);
+    log.error(`Failed to fetch metadata. ${(err as Error).message}`);
     process.exit(1);
   }
 
@@ -241,12 +245,14 @@ async function main(): Promise<void> {
 
   const outputDir = resolve(config.yt2pt.downloads_dir, channelDir, folderName);
   await mkdir(outputDir, { recursive: true });
+  log.debug(`Output directory: ${outputDir}`);
 
-  console.log(`Downloading video to ${outputDir}/...`);
+  log.info(`Downloading video to ${outputDir}/...`);
+  log.debug(`yt-dlp format: ${config.ytdlp.format}, container: ${config.ytdlp.merge_output_format}`);
   try {
     await downloadVideo(ytdlp, url, outputDir, videoFilename, config);
   } catch (err) {
-    console.error(`Error: Failed to download video. ${(err as Error).message}`);
+    log.error(`Failed to download video. ${(err as Error).message}`);
     process.exit(1);
   }
 
@@ -256,22 +262,24 @@ async function main(): Promise<void> {
   const actualExt = videoFile ? extname(videoFile).slice(1) : config.ytdlp.merge_output_format;
   meta.ext = actualExt;
 
-  console.log("Downloading thumbnail...");
+  log.info("Downloading thumbnail...");
   try {
     const thumbFilename = await downloadThumbnail(ytdlp, url, outputDir, config);
     meta.thumbnail = thumbFilename;
+    log.debug(`Thumbnail saved: ${thumbFilename}`);
   } catch (err) {
-    console.error(`Warning: Failed to download thumbnail. ${(err as Error).message}`);
+    log.error(`Failed to download thumbnail. ${(err as Error).message}`);
     meta.thumbnail = "";
   }
 
   // Write metadata.json
   await writeFile(join(outputDir, "metadata.json"), JSON.stringify(meta, null, 2) + "\n");
+  log.debug("metadata.json written");
 
-  console.log(`\nDone! Files saved to:\n  ${outputDir}/`);
+  log.info(`Done! Files saved to: ${outputDir}/`);
   const finalFiles = await readdir(outputDir);
   for (const f of finalFiles) {
-    console.log(`  - ${f}`);
+    log.info(`  - ${f}`);
   }
 }
 
