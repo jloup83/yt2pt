@@ -6,6 +6,7 @@ import { join, resolve } from "node:path";
 import { loadConfig, printConfig } from "./config";
 import { createLogger } from "./logger";
 import { downloadFromYouTube } from "./download";
+import { convertMetadata } from "./convert";
 
 const { version: VERSION } = JSON.parse(
   readFileSync(resolve(__dirname, "..", "package.json"), "utf-8")
@@ -94,8 +95,8 @@ async function main(): Promise<void> {
 
   // ── Convert metadata ──────────────────────────────────────────────
   if (hasConvertMetadata) {
-    log.error("--convert-metadata is not implemented yet");
-    process.exit(1);
+    await convertMetadata(config, log);
+    process.exit(0);
   }
 
   // ── Upload only ───────────────────────────────────────────────────
