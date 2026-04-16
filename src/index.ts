@@ -80,6 +80,7 @@ interface VideoMetadata {
   nsfw: boolean;
   chapters: { timecode: number; title: string }[] | null;
   category: number | null;
+  originallyPublishedAt: string | null;
   captions: string[];
   thumbnail: string;
 }
@@ -192,6 +193,12 @@ function buildMetadata(raw: Record<string, unknown>): VideoMetadata {
       }
     }
   }
+
+  // Convert upload_date (YYYYMMDD) to ISO 8601 for PeerTube originallyPublishedAt
+  const uploadDate = meta["upload_date"] as string | null;
+  meta["originallyPublishedAt"] = uploadDate && uploadDate.length === 8
+    ? `${uploadDate.slice(0, 4)}-${uploadDate.slice(4, 6)}-${uploadDate.slice(6, 8)}T00:00:00.000Z`
+    : null;
 
   // These fields will be set after download
   meta["captions"] = [];
