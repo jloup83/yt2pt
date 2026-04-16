@@ -2,3 +2,4 @@ node_modules/
 dist/
 downloads/
 .DS_Store
+yt2pt.conf.json
