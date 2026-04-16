@@ -1,0 +1,24 @@
+{
+  "yt2pt": {
+    "downloads_dir": "downloads",
+    "log_level": "info",
+    "overwrite_existing": false,
+    "skip_downloaded": true
+  },
+  "ytdlp": {
+    "format": "bv*+ba/b",
+    "merge_output_format": "mkv",
+    "thumbnail_format": "jpg"
+  },
+  "peertube": {
+    "instance_url": "",
+    "api_token": "",
+    "channel_id": "",
+    "privacy": "public",
+    "language": "",
+    "licence": "",
+    "comments_policy": "enabled",
+    "wait_transcoding": true,
+    "generate_transcription": true
+  }
+}
