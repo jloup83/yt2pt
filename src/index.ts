@@ -43,6 +43,24 @@ const METADATA_FIELDS = [
   "chapters",
 ] as const;
 
+const YOUTUBE_TO_PEERTUBE_CATEGORY: Record<string, number> = {
+  "Music": 1,
+  "Film & Animation": 2,
+  "Autos & Vehicles": 3,
+  "Sports": 5,
+  "Travel & Events": 6,
+  "Gaming": 7,
+  "People & Blogs": 8,
+  "Comedy": 9,
+  "Entertainment": 10,
+  "News & Politics": 11,
+  "Howto & Style": 12,
+  "Education": 13,
+  "Nonprofits & Activism": 14,
+  "Science & Technology": 15,
+  "Pets & Animals": 16,
+};
+
 interface VideoMetadata {
   channel: string;
   channel_id: string;
@@ -61,6 +79,7 @@ interface VideoMetadata {
   licence: string | null;
   nsfw: boolean;
   chapters: { timecode: number; title: string }[] | null;
+  category: number | null;
   thumbnail: string;
 }
 
@@ -159,6 +178,18 @@ function buildMetadata(raw: Record<string, unknown>): VideoMetadata {
     meta["tags"] = (meta["tags"] as string[])
       .filter((t) => t.length >= 2 && t.length <= 30)
       .slice(0, 5);
+  }
+
+  // Map YouTube categories to PeerTube category ID
+  const cats = meta["categories"] as string[] | null;
+  meta["category"] = null;
+  if (Array.isArray(cats)) {
+    for (const cat of cats) {
+      if (YOUTUBE_TO_PEERTUBE_CATEGORY[cat] !== undefined) {
+        meta["category"] = YOUTUBE_TO_PEERTUBE_CATEGORY[cat];
+        break;
+      }
+    }
   }
 
   // thumbnail field will be set after download
