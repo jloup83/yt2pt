@@ -61,11 +61,10 @@ function sanitize(name: string): string {
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "") // strip accents
     .toLowerCase()
-    .replace(/'/g, "")
-    .replace(/[<>:"/\\|?*\x00-\x1f]/g, "_")
-    .replace(/\s+/g, "_")
-    .replace(/_+/g, "_")
-    .replace(/^[._]+|[._]+$/g, "");
+    .replace(/\s+/g, "_")           // whitespace → underscore
+    .replace(/[^a-z0-9_-]/g, "")    // keep only letters, digits, hyphens, underscores
+    .replace(/_+/g, "_")            // collapse consecutive underscores
+    .replace(/^[_-]+|[_-]+$/g, ""); // trim leading/trailing underscores and hyphens
 }
 
 function formatDate(yyyymmdd: string): string {
