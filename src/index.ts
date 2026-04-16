@@ -2,7 +2,7 @@
 
 import { execFile } from "node:child_process";
 import { readFileSync } from "node:fs";
-import { mkdir, writeFile, access, readdir } from "node:fs/promises";
+import { mkdir, writeFile, access, readdir, rmdir } from "node:fs/promises";
 import { join, resolve, extname } from "node:path";
 import { loadConfig, printConfig, Config } from "./config";
 import { createLogger, Logger } from "./logger";
@@ -38,7 +38,28 @@ const METADATA_FIELDS = [
   "language",
   "categories",
   "tags",
+  "license",
+  "age_limit",
+  "chapters",
 ] as const;
+
+const YOUTUBE_TO_PEERTUBE_CATEGORY: Record<string, number> = {
+  "Music": 1,
+  "Film & Animation": 2,
+  "Autos & Vehicles": 3,
+  "Sports": 5,
+  "Travel & Events": 6,
+  "Gaming": 7,
+  "People & Blogs": 8,
+  "Comedy": 9,
+  "Entertainment": 10,
+  "News & Politics": 11,
+  "Howto & Style": 12,
+  "Education": 13,
+  "Nonprofits & Activism": 14,
+  "Science & Technology": 15,
+  "Pets & Animals": 16,
+};
 
 interface VideoMetadata {
   channel: string;
@@ -55,6 +76,12 @@ interface VideoMetadata {
   language: string | null;
   categories: string[] | null;
   tags: string[] | null;
+  licence: string | null;
+  nsfw: boolean;
+  chapters: { timecode: number; title: string }[] | null;
+  category: number | null;
+  originallyPublishedAt: string | null;
+  captions: string[];
   thumbnail: string;
 }
 
@@ -134,11 +161,47 @@ function buildMetadata(raw: Record<string, unknown>): VideoMetadata {
   for (const field of METADATA_FIELDS) {
     if (field === "webpage_url") {
       meta["video_url"] = raw[field] ?? null;
+    } else if (field === "license") {
+      meta["licence"] = raw[field] ?? null;
+    } else if (field === "age_limit") {
+      meta["nsfw"] = false;
+    } else if (field === "chapters") {
+      const rawChapters = raw[field] as { start_time: number; title: string }[] | null;
+      meta["chapters"] = rawChapters
+        ? rawChapters.map((ch) => ({ timecode: ch.start_time, title: ch.title }))
+        : null;
     } else {
       meta[field] = raw[field] ?? null;
     }
   }
-  // thumbnail field will be set after download
+
+  // Filter tags to PeerTube constraints: max 5, 2–30 chars each
+  if (Array.isArray(meta["tags"])) {
+    meta["tags"] = (meta["tags"] as string[])
+      .filter((t) => t.length >= 2 && t.length <= 30)
+      .slice(0, 5);
+  }
+
+  // Map YouTube categories to PeerTube category ID
+  const cats = meta["categories"] as string[] | null;
+  meta["category"] = null;
+  if (Array.isArray(cats)) {
+    for (const cat of cats) {
+      if (YOUTUBE_TO_PEERTUBE_CATEGORY[cat] !== undefined) {
+        meta["category"] = YOUTUBE_TO_PEERTUBE_CATEGORY[cat];
+        break;
+      }
+    }
+  }
+
+  // Convert upload_date (YYYYMMDD) to ISO 8601 for PeerTube originallyPublishedAt
+  const uploadDate = meta["upload_date"] as string | null;
+  meta["originallyPublishedAt"] = uploadDate && uploadDate.length === 8
+    ? `${uploadDate.slice(0, 4)}-${uploadDate.slice(4, 6)}-${uploadDate.slice(6, 8)}T00:00:00.000Z`
+    : null;
+
+  // These fields will be set after download
+  meta["captions"] = [];
   meta["thumbnail"] = "";
   return meta as unknown as VideoMetadata;
 }
@@ -160,6 +223,34 @@ async function downloadVideo(
     outputPath,
     url,
   ]);
+}
+
+async function downloadCaptions(
+  ytdlp: string,
+  url: string,
+  outputDir: string
+): Promise<string[]> {
+  const captionsDir = join(outputDir, "captions");
+  await mkdir(captionsDir, { recursive: true });
+
+  await run(ytdlp, [
+    "--skip-download",
+    "--write-subs",
+    "--write-auto-subs",
+    "--sub-format", "vtt",
+    "-o", join(captionsDir, "%(id)s"),
+    url,
+  ]);
+
+  const entries = await readdir(captionsDir);
+  const vttFiles = entries.filter((f) => f.endsWith(".vtt"));
+
+  if (vttFiles.length === 0) {
+    // Remove empty captions directory
+    await rmdir(captionsDir).catch(() => {});
+  }
+
+  return vttFiles;
 }
 
 async function downloadThumbnail(
@@ -270,6 +361,23 @@ async function main(): Promise<void> {
   } catch (err) {
     log.error(`Failed to download thumbnail. ${(err as Error).message}`);
     meta.thumbnail = "";
+  }
+
+  log.info("Downloading captions...");
+  try {
+    const captionFiles = await downloadCaptions(ytdlp, url, outputDir);
+    meta.captions = captionFiles;
+    if (captionFiles.length > 0) {
+      log.info(`Downloaded ${captionFiles.length} caption(s)`);
+      for (const f of captionFiles) {
+        log.debug(`  - captions/${f}`);
+      }
+    } else {
+      log.info("No captions available");
+    }
+  } catch (err) {
+    log.error(`Failed to download captions. ${(err as Error).message}`);
+    meta.captions = [];
   }
 
   // Write metadata.json
