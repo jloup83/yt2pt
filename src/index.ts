@@ -211,7 +211,7 @@ async function main(): Promise<void> {
   // Load and display configuration
   const { config, overrides } = loadConfig();
   const log = createLogger(config);
-  printConfig(config, overrides);
+  printConfig(config, overrides, log);
 
   // Find yt-dlp binary
   let ytdlp: string;

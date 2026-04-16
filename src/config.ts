@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { Logger } from "./logger";
 
 // ── Interfaces ──────────────────────────────────────────────────────
 
@@ -107,18 +108,16 @@ export function loadConfig(): { config: Config; overrides: Set<string> } {
 
 // ── Printer ─────────────────────────────────────────────────────────
 
-export function printConfig(config: Config, overrides: Set<string>): void {
-  console.log("Configuration:");
+export function printConfig(config: Config, overrides: Set<string>, log: Logger): void {
+  log.info("Configuration:");
 
   for (const [section, values] of Object.entries(config)) {
-    console.log(`\n  [${section}]`);
+    log.info(`  [${section}]`);
     for (const [key, value] of Object.entries(values as Record<string, unknown>)) {
       const path = `${section}.${key}`;
       const tag = overrides.has(path) ? "(custom)" : "(default)";
       const display = typeof value === "string" && value === "" ? '""' : String(value);
-      console.log(`    ${key} = ${display} ${tag}`);
+      log.info(`    ${key} = ${display} ${tag}`);
     }
   }
-
-  console.log("");
 }
