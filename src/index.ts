@@ -164,7 +164,7 @@ function buildMetadata(raw: Record<string, unknown>): VideoMetadata {
     } else if (field === "license") {
       meta["licence"] = raw[field] ?? null;
     } else if (field === "age_limit") {
-      meta["nsfw"] = typeof raw[field] === "number" && (raw[field] as number) > 0;
+      meta["nsfw"] = false;
     } else if (field === "chapters") {
       const rawChapters = raw[field] as { start_time: number; title: string }[] | null;
       meta["chapters"] = rawChapters
