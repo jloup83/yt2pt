@@ -2,7 +2,7 @@
 
 import { execFile } from "node:child_process";
 import { readFileSync } from "node:fs";
-import { mkdir, writeFile, access, readdir } from "node:fs/promises";
+import { mkdir, writeFile, access, readdir, rmdir } from "node:fs/promises";
 import { join, resolve, extname } from "node:path";
 import { loadConfig, printConfig, Config } from "./config";
 import { createLogger, Logger } from "./logger";
@@ -80,6 +80,7 @@ interface VideoMetadata {
   nsfw: boolean;
   chapters: { timecode: number; title: string }[] | null;
   category: number | null;
+  captions: string[];
   thumbnail: string;
 }
 
@@ -192,7 +193,8 @@ function buildMetadata(raw: Record<string, unknown>): VideoMetadata {
     }
   }
 
-  // thumbnail field will be set after download
+  // These fields will be set after download
+  meta["captions"] = [];
   meta["thumbnail"] = "";
   return meta as unknown as VideoMetadata;
 }
@@ -214,6 +216,34 @@ async function downloadVideo(
     outputPath,
     url,
   ]);
+}
+
+async function downloadCaptions(
+  ytdlp: string,
+  url: string,
+  outputDir: string
+): Promise<string[]> {
+  const captionsDir = join(outputDir, "captions");
+  await mkdir(captionsDir, { recursive: true });
+
+  await run(ytdlp, [
+    "--skip-download",
+    "--write-subs",
+    "--write-auto-subs",
+    "--sub-format", "vtt",
+    "-o", join(captionsDir, "%(id)s"),
+    url,
+  ]);
+
+  const entries = await readdir(captionsDir);
+  const vttFiles = entries.filter((f) => f.endsWith(".vtt"));
+
+  if (vttFiles.length === 0) {
+    // Remove empty captions directory
+    await rmdir(captionsDir).catch(() => {});
+  }
+
+  return vttFiles;
 }
 
 async function downloadThumbnail(
@@ -324,6 +354,23 @@ async function main(): Promise<void> {
   } catch (err) {
     log.error(`Failed to download thumbnail. ${(err as Error).message}`);
     meta.thumbnail = "";
+  }
+
+  log.info("Downloading captions...");
+  try {
+    const captionFiles = await downloadCaptions(ytdlp, url, outputDir);
+    meta.captions = captionFiles;
+    if (captionFiles.length > 0) {
+      log.info(`Downloaded ${captionFiles.length} caption(s)`);
+      for (const f of captionFiles) {
+        log.debug(`  - captions/${f}`);
+      }
+    } else {
+      log.info("No captions available");
+    }
+  } catch (err) {
+    log.error(`Failed to download captions. ${(err as Error).message}`);
+    meta.captions = [];
   }
 
   // Write metadata.json
