@@ -38,6 +38,9 @@ const METADATA_FIELDS = [
   "language",
   "categories",
   "tags",
+  "license",
+  "age_limit",
+  "chapters",
 ] as const;
 
 interface VideoMetadata {
@@ -55,6 +58,9 @@ interface VideoMetadata {
   language: string | null;
   categories: string[] | null;
   tags: string[] | null;
+  licence: string | null;
+  nsfw: boolean;
+  chapters: { timecode: number; title: string }[] | null;
   thumbnail: string;
 }
 
@@ -134,10 +140,27 @@ function buildMetadata(raw: Record<string, unknown>): VideoMetadata {
   for (const field of METADATA_FIELDS) {
     if (field === "webpage_url") {
       meta["video_url"] = raw[field] ?? null;
+    } else if (field === "license") {
+      meta["licence"] = raw[field] ?? null;
+    } else if (field === "age_limit") {
+      meta["nsfw"] = typeof raw[field] === "number" && (raw[field] as number) > 0;
+    } else if (field === "chapters") {
+      const rawChapters = raw[field] as { start_time: number; title: string }[] | null;
+      meta["chapters"] = rawChapters
+        ? rawChapters.map((ch) => ({ timecode: ch.start_time, title: ch.title }))
+        : null;
     } else {
       meta[field] = raw[field] ?? null;
     }
   }
+
+  // Filter tags to PeerTube constraints: max 5, 2–30 chars each
+  if (Array.isArray(meta["tags"])) {
+    meta["tags"] = (meta["tags"] as string[])
+      .filter((t) => t.length >= 2 && t.length <= 30)
+      .slice(0, 5);
+  }
+
   // thumbnail field will be set after download
   meta["thumbnail"] = "";
   return meta as unknown as VideoMetadata;
