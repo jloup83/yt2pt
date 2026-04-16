@@ -70,6 +70,99 @@ To remove it later: `npm unlink -g yt2pt`
 chmod +x bin/yt-dlp-linux-*
 ```
 
+## PeerTube Authentication
+
+Before uploading videos, you need to configure your PeerTube credentials in `yt2pt.conf.json`.
+
+### 1. Create your config file
+
+```bash
+cp yt2pt.conf.example.json yt2pt.conf.json
+```
+
+Set your instance URL:
+
+```json
+{
+  "peertube": {
+    "instance_url": "https://your-instance.example.com"
+  }
+}
+```
+
+### 2. Get your API token
+
+PeerTube uses OAuth2 for authentication. You need to obtain an access token.
+
+**Prerequisites:** `curl` and `jq` must be installed.
+
+**One-liner** (replace the URL, enter your username and password when prompted):
+
+```bash
+API="https://your-instance.example.com/api/v1" && \
+  printf "Username: " && read USER && \
+  printf "Password: " && stty -echo && read PASS && stty echo && echo && \
+  CLIENT=$(curl -s "$API/oauth-clients/local") && \
+  TOKEN=$(curl -s "$API/users/token" \
+    --data client_id="$(echo "$CLIENT" | jq -r .client_id)" \
+    --data client_secret="$(echo "$CLIENT" | jq -r .client_secret)" \
+    --data grant_type=password \
+    --data username="$USER" \
+    --data-urlencode password="$PASS" \
+    | jq -r .access_token) && \
+  jq --arg t "$TOKEN" '.peertube.api_token = $t' yt2pt.conf.json > tmp.$$.json && \
+  mv tmp.$$.json yt2pt.conf.json && \
+  echo "Token set successfully"
+```
+
+**Or manually:**
+
+1. Get the OAuth client credentials:
+
+   ```bash
+   curl -s https://your-instance.example.com/api/v1/oauth-clients/local | jq
+   ```
+
+2. Get an access token:
+
+   ```bash
+   curl -s https://your-instance.example.com/api/v1/users/token \
+     --data client_id="YOUR_CLIENT_ID" \
+     --data client_secret="YOUR_CLIENT_SECRET" \
+     --data grant_type=password \
+     --data username="YOUR_USERNAME" \
+     --data-urlencode password="YOUR_PASSWORD" \
+     | jq -r .access_token
+   ```
+
+3. Copy the token into `yt2pt.conf.json`:
+
+   ```json
+   {
+     "peertube": {
+       "api_token": "YOUR_ACCESS_TOKEN"
+     }
+   }
+   ```
+
+> **Note:** Access tokens expire after ~4 hours. You will need to regenerate the token when it expires.
+
+### 3. Get your channel ID
+
+```bash
+curl -s https://your-instance.example.com/api/v1/accounts/YOUR_USERNAME/video-channels | jq '.data[] | {id, name, displayName}'
+```
+
+Set the channel ID in your config:
+
+```json
+{
+  "peertube": {
+    "channel_id": "YOUR_CHANNEL_ID"
+  }
+}
+```
+
 ## Usage
 
 ```bash
@@ -79,81 +172,55 @@ yt2pt -h
 # Show version
 yt2pt -v
 
-# Download a video
-yt2pt https://www.youtube.com/watch?v=q5Mq4kEa7pA
+# Download a video from YouTube
+yt2pt 'https://www.youtube.com/watch?v=VIDEO_ID'
+
+# Download only (no conversion or upload)
+yt2pt 'https://www.youtube.com/watch?v=VIDEO_ID' --download-only
+
+# Convert all downloaded metadata for PeerTube
+yt2pt --convert-metadata
+
+# Upload all converted videos to PeerTube
+yt2pt --upload-only
 ```
 
-## What it does
+> **Tip:** Always quote YouTube URLs in your shell to avoid issues with the `?` character.
 
-Given a YouTube URL, yt2pt will:
+## Pipeline
 
-1. **Download the video** in best available quality (audio + video muxed into MKV)
-2. **Download the thumbnail** in best available quality (converted to JPG)
-3. **Create a `metadata.json`** with essential video information
+yt2pt works in three phases:
 
-## Folder structure
+1. **Download** — Fetches video, thumbnail, subtitles, and raw metadata from YouTube
+2. **Convert** — Transforms YouTube metadata into PeerTube-ready API files
+3. **Upload** — Sends everything to your PeerTube instance
 
-All downloads are stored under a `downloads/` directory:
+### Folder structure
+
+All data is stored under a `data/` directory (configurable via `data_dir`):
 
 ```text
-downloads/
-└── {CHANNEL_NAME}/
-    └── {CHANNEL_NAME}_{PUBLISHED_DATE}_{VIDEO_TITLE}_{[VIDEO_ID]}/
-        ├── metadata.json
-        ├── thumbnail.jpg
-        └── {CHANNEL_NAME}_{PUBLISHED_DATE}_{VIDEO_TITLE}_{[VIDEO_ID]}.mkv
+data/
+├── downloaded_from_youtube/
+│   └── {channel}/
+│       └── {channel}_{date}_{title}_[{id}]/
+│           ├── metadata.json          # Raw yt-dlp metadata
+│           ├── video.mkv
+│           ├── thumbnail.jpg
+│           └── subtitles/
+│               └── {id}.{lang}.vtt
+└── upload_to_peertube/
+    └── {channel}/
+        └── {channel}_{date}_{title}_[{id}]/
+            ├── upload_video.json      # Video upload metadata
+            ├── set_thumbnail.json     # Thumbnail file reference
+            ├── upload_subtitles.json  # Subtitle files (if any)
+            ├── set_chapters.json      # Chapter markers (if any)
+            ├── video.mkv
+            ├── thumbnail.jpg
+            └── subtitles/
+                └── {id}.{lang}.vtt
 ```
-
-### Example
-
-```text
-downloads/
-└── fatherphi/
-    └── fatherphi_2026-01-29_day_6_maybe_the_chatgpt_limit_really_is_just_200_now_[q5Mq4kEa7pA]/
-        ├── metadata.json
-        ├── thumbnail.jpg
-        └── fatherphi_2026-01-29_day_6_maybe_the_chatgpt_limit_really_is_just_200_now_[q5Mq4kEa7pA].mkv
-```
-
-## metadata.json
-
-```json
-{
-  "channel": "FatherPhi",
-  "channel_id": "UCIw9p-0zI1rEPEs_SS6fDkg",
-  "channel_url": "https://www.youtube.com/channel/UCIw9p-0zI1rEPEs_SS6fDkg",
-  "id": "q5Mq4kEa7pA",
-  "title": "Day 6… 🫩 maybe the #chatgpt limit really is just 200 now",
-  "ext": "mkv",
-  "description": "...",
-  "upload_date": "20260129",
-  "video_url": "https://www.youtube.com/watch?v=q5Mq4kEa7pA",
-  "duration": 195,
-  "duration_string": "3:15",
-  "language": "en",
-  "categories": ["People & Blogs"],
-  "tags": [],
-  "thumbnail": "thumbnail.jpg"
-}
-```
-
-| Field | Description |
-| ----- | ----------- |
-| `channel` | Full name of the YouTube channel |
-| `channel_id` | Channel identifier |
-| `channel_url` | URL of the channel |
-| `id` | YouTube video ID |
-| `title` | Video title |
-| `ext` | Video file extension |
-| `description` | Video description |
-| `upload_date` | Upload date in UTC (YYYYMMDD) |
-| `video_url` | YouTube video URL |
-| `duration` | Video duration in seconds |
-| `duration_string` | Human-readable video duration |
-| `language` | Video language (e.g. `"en"`) |
-| `categories` | YouTube categories |
-| `tags` | YouTube tags |
-| `thumbnail` | Filename of the thumbnail in the same folder |
 
 ## Contributing
 

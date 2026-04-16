@@ -1,9 +1,11 @@
 {
   "yt2pt": {
-    "downloads_dir": "downloads",
+    "data_dir": "data",
     "log_level": "info",
     "overwrite_existing": false,
-    "skip_downloaded": true
+    "skip_downloaded": true,
+    "remove_video_after_upload": false,
+    "remove_video_after_metadata_conversion": false
   },
   "ytdlp": {
     "format": "bv*+ba/b",
