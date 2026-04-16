@@ -4,6 +4,7 @@ import { execFile } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { mkdir, writeFile, access, readdir } from "node:fs/promises";
 import { join, resolve, extname } from "node:path";
+import { loadConfig, printConfig, Config } from "./config";
 
 const { version: VERSION } = JSON.parse(
   readFileSync(resolve(__dirname, "..", "package.json"), "utf-8")
@@ -145,14 +146,15 @@ async function downloadVideo(
   ytdlp: string,
   url: string,
   outputDir: string,
-  videoFilename: string
+  videoFilename: string,
+  config: Config
 ): Promise<void> {
   const outputPath = join(outputDir, videoFilename);
   await run(ytdlp, [
     "-f",
-    "bv*+ba/b", // best video + best audio, fallback to best combined
+    config.ytdlp.format,
     "--merge-output-format",
-    "mkv",
+    config.ytdlp.merge_output_format,
     "-o",
     outputPath,
     url,
@@ -162,14 +164,15 @@ async function downloadVideo(
 async function downloadThumbnail(
   ytdlp: string,
   url: string,
-  outputDir: string
+  outputDir: string,
+  config: Config
 ): Promise<string> {
   // Download just the thumbnail
   await run(ytdlp, [
     "--skip-download",
     "--write-thumbnail",
     "--convert-thumbnails",
-    "jpg",
+    config.ytdlp.thumbnail_format,
     "-o",
     join(outputDir, "thumbnail"),
     url,
@@ -204,6 +207,10 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
+  // Load and display configuration
+  const { config, overrides } = loadConfig();
+  printConfig(config, overrides);
+
   // Find yt-dlp binary
   let ytdlp: string;
   try {
@@ -232,12 +239,12 @@ async function main(): Promise<void> {
   const folderName = `${channelDir}_${publishedDate}_${videoTitle}_[${videoId}]`;
   const videoFilename = `${channelDir}_${publishedDate}_${videoTitle}_[${videoId}]`;
 
-  const outputDir = resolve("downloads", channelDir, folderName);
+  const outputDir = resolve(config.yt2pt.downloads_dir, channelDir, folderName);
   await mkdir(outputDir, { recursive: true });
 
   console.log(`Downloading video to ${outputDir}/...`);
   try {
-    await downloadVideo(ytdlp, url, outputDir, videoFilename);
+    await downloadVideo(ytdlp, url, outputDir, videoFilename, config);
   } catch (err) {
     console.error(`Error: Failed to download video. ${(err as Error).message}`);
     process.exit(1);
@@ -246,12 +253,12 @@ async function main(): Promise<void> {
   // Determine the actual video file extension
   const files = await readdir(outputDir);
   const videoFile = files.find((f) => f.startsWith(videoFilename) && !f.endsWith(".part"));
-  const actualExt = videoFile ? extname(videoFile).slice(1) : "mkv";
+  const actualExt = videoFile ? extname(videoFile).slice(1) : config.ytdlp.merge_output_format;
   meta.ext = actualExt;
 
   console.log("Downloading thumbnail...");
   try {
-    const thumbFilename = await downloadThumbnail(ytdlp, url, outputDir);
+    const thumbFilename = await downloadThumbnail(ytdlp, url, outputDir, config);
     meta.thumbnail = thumbFilename;
   } catch (err) {
     console.error(`Warning: Failed to download thumbnail. ${(err as Error).message}`);
