@@ -7,6 +7,7 @@ import { loadConfig, printConfig } from "./config";
 import { createLogger } from "./logger";
 import { downloadFromYouTube } from "./download";
 import { convertMetadata } from "./convert";
+import { uploadToPeertube } from "./upload";
 
 const { version: VERSION } = JSON.parse(
   readFileSync(resolve(__dirname, "..", "package.json"), "utf-8")
@@ -101,8 +102,8 @@ async function main(): Promise<void> {
 
   // ── Upload only ───────────────────────────────────────────────────
   if (hasUploadOnly) {
-    log.error("--upload-only is not implemented yet");
-    process.exit(1);
+    await uploadToPeertube(config, log);
+    process.exit(0);
   }
 
   // ── Download (default) ────────────────────────────────────────────

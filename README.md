@@ -100,8 +100,8 @@ PeerTube uses OAuth2 for authentication. You need to obtain an access token.
 
 ```bash
 API="https://your-instance.example.com/api/v1" && \
-  read -p "Username: " USER && \
-  read -sp "Password: " PASS && echo && \
+  printf "Username: " && read USER && \
+  printf "Password: " && stty -echo && read PASS && stty echo && echo && \
   CLIENT=$(curl -s "$API/oauth-clients/local") && \
   TOKEN=$(curl -s "$API/users/token" \
     --data client_id="$(echo "$CLIENT" | jq -r .client_id)" \
