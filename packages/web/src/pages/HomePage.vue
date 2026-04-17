@@ -153,6 +153,46 @@ const canAdd = computed(
   () => !addBusy.value && ytUrl.value.trim().length > 0 && selectedPtChannel.value.length > 0,
 );
 
+// ── Add Video form (single-video sync) ────────────────────────────
+const ytVideoUrl = ref("");
+const selectedVideoPtChannel = ref<string>("");
+const addVideoBusy = ref(false);
+const addVideoStatus = ref<{ kind: "ok" | "err"; msg: string } | null>(null);
+
+watch(ptChannels, (next) => {
+  if (next.length > 0 && !selectedVideoPtChannel.value) {
+    selectedVideoPtChannel.value = String(next[0].id);
+  }
+});
+
+async function onAddVideo(): Promise<void> {
+  addVideoStatus.value = null;
+  if (!ytVideoUrl.value.trim() || !selectedVideoPtChannel.value) {
+    addVideoStatus.value = { kind: "err", msg: "YouTube URL and PeerTube channel are required." };
+    return;
+  }
+  addVideoBusy.value = true;
+  try {
+    const res = await endpoints.addVideo(ytVideoUrl.value.trim(), selectedVideoPtChannel.value);
+    addVideoStatus.value = {
+      kind: "ok",
+      msg: `Video #${res.video_id} queued (channel #${res.channel_id}).`,
+    };
+    ytVideoUrl.value = "";
+    await loadChannels();
+  } catch (err) {
+    addVideoStatus.value = { kind: "err", msg: (err as Error).message };
+  } finally {
+    addVideoBusy.value = false;
+  }
+}
+
+const canAddVideo = computed(
+  () => !addVideoBusy.value
+    && ytVideoUrl.value.trim().length > 0
+    && selectedVideoPtChannel.value.length > 0,
+);
+
 // Refresh the channels list whenever a sync finishes on any channel.
 events.onSyncComplete(() => { void loadChannels(); });
 // Surface terminal sync failures to the matching row.
@@ -283,6 +323,39 @@ onMounted(async () => {
           Refresh PeerTube channels
         </button>
         <span v-if="addStatus" :class="addStatus.kind === 'ok' ? 'ok' : 'error'">{{ addStatus.msg }}</span>
+      </div>
+    </form>
+  </article>
+
+  <!-- ── Add single video ─────────────────────────────────────── -->
+  <article>
+    <header><strong>Add video</strong></header>
+    <p><small>Queue a single YouTube video. If its channel isn't mapped yet, the mapping
+      to the chosen PeerTube channel is created automatically.</small></p>
+    <form @submit.prevent="onAddVideo">
+      <label>
+        YouTube video URL
+        <input
+          type="url"
+          v-model="ytVideoUrl"
+          placeholder="https://www.youtube.com/watch?v=…  or  https://youtu.be/…"
+          :disabled="addVideoBusy"
+        />
+      </label>
+      <label>
+        PeerTube channel
+        <select v-model="selectedVideoPtChannel" :disabled="addVideoBusy || ptChannelsLoading || ptChannels.length === 0">
+          <option value="" disabled>
+            {{ ptChannelsLoading ? "Loading…" : ptChannels.length === 0 ? "(none available)" : "Select a channel" }}
+          </option>
+          <option v-for="ch in ptChannels" :key="ch.id" :value="String(ch.id)">
+            {{ ch.displayName }} ({{ ch.name }})
+          </option>
+        </select>
+      </label>
+      <div class="row">
+        <button type="submit" :aria-busy="addVideoBusy" :disabled="!canAddVideo">Sync video</button>
+        <span v-if="addVideoStatus" :class="addVideoStatus.kind === 'ok' ? 'ok' : 'error'">{{ addVideoStatus.msg }}</span>
       </div>
     </form>
   </article>

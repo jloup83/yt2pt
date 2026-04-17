@@ -13,6 +13,12 @@ import {
   getVideoWithChannel,
   parseStatuses,
 } from "./videos";
+import {
+  extractYoutubeVideoId,
+  normalizeYoutubeVideoUrl,
+  type ResolvedYoutubeVideo,
+  type VideoResolver,
+} from "./youtube-video";
 import type { Config, Logger, ResolvedPaths } from "@yt2pt/shared";
 
 function makeConfig(): Config {
@@ -227,6 +233,230 @@ test("GET /api/videos/:id returns 200 / 404 / 400", async () => {
 
     const bad = await app.inject({ method: "GET", url: "/api/videos/abc" });
     assert.equal(bad.statusCode, 400);
+    await app.close();
+  } finally {
+    cleanup();
+  }
+});
+
+// ── URL helpers ─────────────────────────────────────────────────────
+
+test("extractYoutubeVideoId accepts watch / youtu.be / shorts / live forms", () => {
+  const cases: [string, string][] = [
+    ["https://www.youtube.com/watch?v=dQw4w9WgXcQ", "dQw4w9WgXcQ"],
+    ["https://youtube.com/watch?v=dQw4w9WgXcQ&t=42", "dQw4w9WgXcQ"],
+    ["https://youtu.be/dQw4w9WgXcQ", "dQw4w9WgXcQ"],
+    ["https://youtu.be/dQw4w9WgXcQ?t=10", "dQw4w9WgXcQ"],
+    ["https://www.youtube.com/shorts/abcdefghijk", "abcdefghijk"],
+    ["https://www.youtube.com/live/abcdefghijk", "abcdefghijk"],
+    ["https://www.youtube.com/embed/abcdefghijk", "abcdefghijk"],
+    ["https://m.youtube.com/watch?v=dQw4w9WgXcQ", "dQw4w9WgXcQ"],
+  ];
+  for (const [raw, expected] of cases) {
+    assert.equal(extractYoutubeVideoId(raw), expected, raw);
+  }
+});
+
+test("extractYoutubeVideoId rejects non-YouTube or malformed URLs", () => {
+  for (const raw of [
+    "https://example.com/watch?v=dQw4w9WgXcQ",
+    "https://www.youtube.com/watch?v=tooShort",
+    "https://www.youtube.com/@SomeChannel",
+    "not a url",
+    "",
+  ]) {
+    assert.equal(extractYoutubeVideoId(raw), null, raw);
+  }
+});
+
+test("normalizeYoutubeVideoUrl produces the canonical watch URL", () => {
+  assert.equal(
+    normalizeYoutubeVideoUrl("https://youtu.be/dQw4w9WgXcQ?t=10"),
+    "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+  );
+  assert.equal(normalizeYoutubeVideoUrl("https://example.com/x"), null);
+});
+
+// ── POST /api/videos ────────────────────────────────────────────────
+
+function fakeResolver(meta: Partial<ResolvedYoutubeVideo> & { youtube_video_id: string }): VideoResolver {
+  return async () => ({
+    title: meta.title ?? null,
+    channel_name: meta.channel_name ?? null,
+    channel_url: meta.channel_url ?? null,
+    youtube_video_id: meta.youtube_video_id,
+  });
+}
+
+function makeCtxWithResolver(resolver: VideoResolver): TestCtx {
+  const t = makeCtx();
+  t.ctx.videoResolver = resolver;
+  return t;
+}
+
+test("POST /api/videos rejects missing fields", async () => {
+  const { ctx, cleanup } = makeCtx();
+  try {
+    const app = buildServer(ctx);
+    const r1 = await app.inject({ method: "POST", url: "/api/videos", payload: {} });
+    assert.equal(r1.statusCode, 400);
+    const r2 = await app.inject({
+      method: "POST", url: "/api/videos",
+      payload: { youtube_url: "https://youtu.be/dQw4w9WgXcQ" },
+    });
+    assert.equal(r2.statusCode, 400);
+    await app.close();
+  } finally {
+    cleanup();
+  }
+});
+
+test("POST /api/videos rejects an invalid YouTube URL", async () => {
+  const { ctx, cleanup } = makeCtx();
+  try {
+    const app = buildServer(ctx);
+    const res = await app.inject({
+      method: "POST", url: "/api/videos",
+      payload: { youtube_url: "https://example.com/watch?v=dQw4w9WgXcQ", peertube_channel_id: "5" },
+    });
+    assert.equal(res.statusCode, 400);
+    await app.close();
+  } finally {
+    cleanup();
+  }
+});
+
+test("POST /api/videos creates a new channel mapping when the YT channel is unknown", async () => {
+  const { ctx, cleanup } = makeCtxWithResolver(fakeResolver({
+    youtube_video_id: "dQw4w9WgXcQ",
+    title: "Never Gonna",
+    channel_name: "Rick Astley",
+    channel_url: "https://www.youtube.com/@RickAstley",
+  }));
+  try {
+    const app = buildServer(ctx);
+    const res = await app.inject({
+      method: "POST", url: "/api/videos",
+      payload: { youtube_url: "https://youtu.be/dQw4w9WgXcQ", peertube_channel_id: "5" },
+    });
+    assert.equal(res.statusCode, 202);
+    const body = res.json();
+    assert.equal(body.status, "queued");
+    assert.ok(body.video_id > 0);
+    assert.ok(body.channel_id > 0);
+
+    const ch = ctx.db.prepare("SELECT * FROM channels WHERE id = ?").get(body.channel_id) as
+      { youtube_channel_url: string; youtube_channel_name: string; peertube_channel_id: string };
+    assert.equal(ch.youtube_channel_url, "https://www.youtube.com/@RickAstley");
+    assert.equal(ch.youtube_channel_name, "Rick Astley");
+    assert.equal(ch.peertube_channel_id, "5");
+
+    const v = ctx.db.prepare("SELECT * FROM videos WHERE id = ?").get(body.video_id) as
+      { youtube_video_id: string; status: string; channel_id: number; title: string };
+    assert.equal(v.youtube_video_id, "dQw4w9WgXcQ");
+    assert.equal(v.status, "DOWNLOAD_QUEUED");
+    assert.equal(v.channel_id, body.channel_id);
+    assert.equal(v.title, "Never Gonna");
+    await app.close();
+  } finally {
+    cleanup();
+  }
+});
+
+test("POST /api/videos reuses an existing channel mapping when PT target matches", async () => {
+  const { ctx, cleanup } = makeCtxWithResolver(fakeResolver({
+    youtube_video_id: "dQw4w9WgXcQ",
+    channel_url: "https://www.youtube.com/@RickAstley",
+    channel_name: "Rick Astley",
+  }));
+  try {
+    const existing = insertChannel(ctx.db, {
+      youtube_channel_url: "https://www.youtube.com/@RickAstley",
+      peertube_channel_id: "5",
+    });
+    const app = buildServer(ctx);
+    const res = await app.inject({
+      method: "POST", url: "/api/videos",
+      payload: { youtube_url: "https://youtu.be/dQw4w9WgXcQ", peertube_channel_id: "5" },
+    });
+    assert.equal(res.statusCode, 202);
+    assert.equal(res.json().channel_id, existing.id);
+
+    const count = ctx.db.prepare("SELECT COUNT(*) AS n FROM channels").get() as { n: number };
+    assert.equal(count.n, 1);
+    await app.close();
+  } finally {
+    cleanup();
+  }
+});
+
+test("POST /api/videos returns 409 when YT channel maps to a different PT channel", async () => {
+  const { ctx, cleanup } = makeCtxWithResolver(fakeResolver({
+    youtube_video_id: "dQw4w9WgXcQ",
+    channel_url: "https://www.youtube.com/@RickAstley",
+  }));
+  try {
+    insertChannel(ctx.db, {
+      youtube_channel_url: "https://www.youtube.com/@RickAstley",
+      peertube_channel_id: "5",
+    });
+    const app = buildServer(ctx);
+    const res = await app.inject({
+      method: "POST", url: "/api/videos",
+      payload: { youtube_url: "https://youtu.be/dQw4w9WgXcQ", peertube_channel_id: "7" },
+    });
+    assert.equal(res.statusCode, 409);
+    const body = res.json();
+    assert.equal(body.existing_peertube_channel_id, "5");
+    assert.equal(body.requested_peertube_channel_id, "7");
+
+    const vc = ctx.db.prepare("SELECT COUNT(*) AS n FROM videos").get() as { n: number };
+    assert.equal(vc.n, 0);
+    await app.close();
+  } finally {
+    cleanup();
+  }
+});
+
+test("POST /api/videos returns 409 when the video is already tracked", async () => {
+  const { ctx, cleanup } = makeCtxWithResolver(fakeResolver({
+    youtube_video_id: "dQw4w9WgXcQ",
+    channel_url: "https://www.youtube.com/@RickAstley",
+  }));
+  try {
+    const ch = insertChannel(ctx.db, {
+      youtube_channel_url: "https://www.youtube.com/@RickAstley",
+      peertube_channel_id: "5",
+    });
+    insertVideo(ctx.db, {
+      youtube_video_id: "dQw4w9WgXcQ",
+      channel_id: ch.id,
+      status: "UPLOADED",
+    });
+    const app = buildServer(ctx);
+    const res = await app.inject({
+      method: "POST", url: "/api/videos",
+      payload: { youtube_url: "https://youtu.be/dQw4w9WgXcQ", peertube_channel_id: "5" },
+    });
+    assert.equal(res.statusCode, 409);
+    const body = res.json();
+    assert.equal(body.error, "video already tracked");
+    assert.equal(body.status, "UPLOADED");
+    await app.close();
+  } finally {
+    cleanup();
+  }
+});
+
+test("POST /api/videos returns 502 when yt-dlp metadata fetch fails", async () => {
+  const { ctx, cleanup } = makeCtxWithResolver(async () => { throw new Error("boom"); });
+  try {
+    const app = buildServer(ctx);
+    const res = await app.inject({
+      method: "POST", url: "/api/videos",
+      payload: { youtube_url: "https://youtu.be/dQw4w9WgXcQ", peertube_channel_id: "5" },
+    });
+    assert.equal(res.statusCode, 502);
     await app.close();
   } finally {
     cleanup();

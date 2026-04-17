@@ -2,6 +2,23 @@ import type { FastifyInstance } from "fastify";
 import type { Database } from "better-sqlite3";
 import type { ServerContext } from "../server";
 import { VIDEO_STATUS, type VideoStatus } from "../db/schema";
+import {
+  getChannelByUrl,
+  insertChannel,
+  type Channel,
+} from "../db/channels";
+import {
+  getVideoByYoutubeId,
+  insertVideo,
+} from "../db/videos";
+import { findYtDlpBinary } from "../workers/paths";
+import { normalizeYoutubeChannelUrl } from "./channels";
+import {
+  extractYoutubeVideoId,
+  makeDefaultVideoResolver,
+  normalizeYoutubeVideoUrl,
+  type VideoResolver,
+} from "./youtube-video";
 
 export interface VideoWithChannel {
   id: number;
@@ -150,5 +167,142 @@ export async function registerVideoRoutes(app: FastifyInstance): Promise<void> {
       return { error: "not found" };
     }
     return row;
+  });
+
+  // ── POST /api/videos — single-video sync ─────────────────────────
+  //
+  // Body: { youtube_url: string, peertube_channel_id: string|number }
+  //
+  // Resolves the video's YouTube channel via yt-dlp, either reuses an
+  // existing yt2pt channel mapping or creates one on the fly, and
+  // enqueues the video for the download → convert → upload pipeline.
+  app.post("/api/videos", async (req, reply) => {
+    const body = (req.body ?? {}) as {
+      youtube_url?: unknown;
+      peertube_channel_id?: unknown;
+    };
+
+    const rawUrl = typeof body.youtube_url === "string" ? body.youtube_url : "";
+    const ptId =
+      typeof body.peertube_channel_id === "string"
+        ? body.peertube_channel_id
+        : typeof body.peertube_channel_id === "number"
+          ? String(body.peertube_channel_id)
+          : "";
+
+    if (!rawUrl || !ptId) {
+      reply.code(400);
+      return { error: "youtube_url and peertube_channel_id are required" };
+    }
+
+    const videoId = extractYoutubeVideoId(rawUrl);
+    const normalizedUrl = normalizeYoutubeVideoUrl(rawUrl);
+    if (!videoId || !normalizedUrl) {
+      reply.code(400);
+      return { error: "invalid YouTube video URL" };
+    }
+
+    // Short-circuit before ever launching yt-dlp: the video may already
+    // be tracked under a channel we know.
+    const already = getVideoByYoutubeId(ctx.db, videoId);
+    if (already) {
+      reply.code(409);
+      return {
+        error: "video already tracked",
+        video_id: already.id,
+        channel_id: already.channel_id,
+        status: already.status,
+      };
+    }
+
+    // Resolve channel info via yt-dlp (or an injected resolver in tests).
+    let resolver: VideoResolver;
+    if (ctx.videoResolver) {
+      resolver = ctx.videoResolver;
+    } else {
+      try {
+        const ytdlp = await findYtDlpBinary(ctx.paths.binDir);
+        resolver = makeDefaultVideoResolver(ytdlp);
+      } catch (err) {
+        ctx.logger.error(
+          `yt-dlp binary unavailable: ${err instanceof Error ? err.message : String(err)}`
+        );
+        reply.code(503);
+        return { error: "yt-dlp unavailable" };
+      }
+    }
+
+    let meta;
+    try {
+      meta = await resolver(normalizedUrl);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      ctx.logger.error(`video metadata fetch failed for ${normalizedUrl}: ${msg}`);
+      reply.code(502);
+      return { error: `failed to fetch video metadata: ${msg}` };
+    }
+
+    if (meta.youtube_video_id !== videoId) {
+      ctx.logger.info(
+        `video id mismatch: URL said ${videoId}, yt-dlp said ${meta.youtube_video_id}. Using yt-dlp.`
+      );
+    }
+
+    if (!meta.channel_url) {
+      reply.code(502);
+      return { error: "could not determine the video's YouTube channel" };
+    }
+    const canonicalChannelUrl = normalizeYoutubeChannelUrl(meta.channel_url) ?? meta.channel_url;
+
+    // Find-or-create the yt2pt channel mapping. If an existing mapping
+    // targets a *different* PeerTube channel, surface a 409 instead of
+    // silently uploading to the wrong place.
+    let channel: Channel | null = getChannelByUrl(ctx.db, canonicalChannelUrl);
+    if (channel) {
+      if (channel.peertube_channel_id !== ptId) {
+        reply.code(409);
+        return {
+          error:
+            "this YouTube channel is already mapped to a different PeerTube channel",
+          channel_id: channel.id,
+          existing_peertube_channel_id: channel.peertube_channel_id,
+          requested_peertube_channel_id: ptId,
+        };
+      }
+    } else {
+      channel = insertChannel(ctx.db, {
+        youtube_channel_url: canonicalChannelUrl,
+        youtube_channel_name: meta.channel_name,
+        peertube_channel_id: ptId,
+      });
+    }
+
+    // Double-check the video wasn't inserted by a concurrent request.
+    const race = getVideoByYoutubeId(ctx.db, meta.youtube_video_id);
+    if (race) {
+      reply.code(409);
+      return {
+        error: "video already tracked",
+        video_id: race.id,
+        channel_id: race.channel_id,
+        status: race.status,
+      };
+    }
+
+    const video = insertVideo(ctx.db, {
+      youtube_video_id: meta.youtube_video_id,
+      channel_id: channel.id,
+      title: meta.title,
+      status: "DOWNLOAD_QUEUED",
+    });
+
+    ctx.queue?.notifyNewJob();
+
+    reply.code(202);
+    return {
+      status: "queued",
+      video_id: video.id,
+      channel_id: channel.id,
+    };
   });
 }

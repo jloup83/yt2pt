@@ -138,6 +138,10 @@ export const endpoints = {
   listChannels: () => api.get<{ channels: ChannelSummary[] }>("/channels"),
   addChannel: (youtube_channel_url: string, peertube_channel_id: string) =>
     api.post<ChannelSummary>("/channels", { youtube_channel_url, peertube_channel_id }),
+  addVideo: (youtube_url: string, peertube_channel_id: string) =>
+    api.post<{ status: string; video_id: number; channel_id: number }>(
+      "/videos", { youtube_url, peertube_channel_id },
+    ),
   deleteChannel: (id: number) => api.delete<void>(`/channels/${id}`),
   syncChannel: (id: number) =>
     api.post<{ status: string; channel_id: number }>(`/channels/${id}/sync`),

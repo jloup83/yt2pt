@@ -12,7 +12,7 @@ import {
   runChannelsRemove,
   runChannelsSync,
 } from "./commands/channels";
-import { runVideosList } from "./commands/videos";
+import { runVideosAdd, runVideosList } from "./commands/videos";
 import { setJsonMode, paint } from "./output/format";
 
 const { version: VERSION } = JSON.parse(
@@ -33,6 +33,7 @@ Usage:
   yt2pt videos                          List tracked videos
   yt2pt videos --status=UPLOADING       Filter by status
   yt2pt videos --channel=<id>           Filter by channel
+  yt2pt videos add <yt-url> <pt-id>     Queue a single video for sync
   yt2pt help                            Show this help
   yt2pt version                         Show version
 
@@ -147,6 +148,14 @@ async function dispatch(
     }
 
     case "videos":
+      if (rest.length > 0 && rest[0] === "add") {
+        const subArgs = rest.slice(1);
+        if (subArgs.length !== 2) {
+          process.stderr.write(`Error: 'videos add' requires <yt-url> and <pt-id>\n`);
+          return 1;
+        }
+        return runVideosAdd(client, subArgs[0], subArgs[1]);
+      }
       return runVideosList(client, {
         status: typeof flags.status === "string" ? (flags.status as string) : undefined,
         channel: typeof flags.channel === "string" ? (flags.channel as string) : undefined,

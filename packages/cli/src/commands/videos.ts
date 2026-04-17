@@ -1,5 +1,5 @@
 import type { ApiClient } from "../api/client";
-import { isJsonMode, printJson } from "../output/format";
+import { isJsonMode, paint, printJson } from "../output/format";
 import { renderVideosTable, type VideoRow } from "../output/table";
 
 interface VideosListResponse {
@@ -37,5 +37,32 @@ export async function runVideosList(client: ApiClient, filters: VideosFilters = 
   if (res.total > res.videos.length) {
     process.stdout.write(`\nShowing ${res.videos.length} of ${res.total} videos (page ${res.page}).\n`);
   }
+  return 0;
+}
+
+// ── videos add ──────────────────────────────────────────────────────
+
+interface VideoAddResponse {
+  status: string;
+  video_id: number;
+  channel_id: number;
+}
+
+export async function runVideosAdd(
+  client: ApiClient,
+  ytUrl: string,
+  ptId: string,
+): Promise<number> {
+  const res = await client.request<VideoAddResponse>("/api/videos", {
+    method: "POST",
+    body: { youtube_url: ytUrl, peertube_channel_id: ptId },
+  });
+  if (isJsonMode()) {
+    printJson(res);
+    return 0;
+  }
+  process.stdout.write(
+    `${paint("✓", "green")} Queued video #${res.video_id} (channel #${res.channel_id}) — ${res.status}\n`,
+  );
   return 0;
 }
