@@ -1,6 +1,6 @@
 {
   "name": "yt2pt-monorepo",
-  "version": "0.2.0",
+  "version": "1.0.0-beta",
   "private": true,
   "description": "Download YouTube videos with metadata and thumbnails for PeerTube migration",
   "workspaces": [
