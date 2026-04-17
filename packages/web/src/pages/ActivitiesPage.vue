@@ -261,6 +261,58 @@ function channelDisplayName(c: ChannelSummary): string {
 }
 
 const summaryEntryOrder = STATUSES;
+
+// ── Delete flow ───────────────────────────────────────────────────
+type DeleteTarget =
+  | { kind: "video"; video: VideoRow; channelName: string }
+  | { kind: "channel"; channel: ChannelSummary; videoCount: number };
+
+const deleteTarget = ref<DeleteTarget | null>(null);
+const deleteFromPeertube = ref(false);
+const deleting = ref(false);
+const deleteError = ref<string | null>(null);
+
+function askDeleteVideo(v: VideoRow, g: ChannelGroup): void {
+  deleteTarget.value = { kind: "video", video: v, channelName: channelDisplayName(g.channel) };
+  deleteFromPeertube.value = false;
+  deleteError.value = null;
+}
+
+function askDeleteChannel(g: ChannelGroup): void {
+  deleteTarget.value = { kind: "channel", channel: g.channel, videoCount: g.total };
+  deleteFromPeertube.value = false;
+  deleteError.value = null;
+}
+
+function cancelDelete(): void {
+  if (deleting.value) return;
+  deleteTarget.value = null;
+  deleteError.value = null;
+}
+
+async function confirmDelete(): Promise<void> {
+  const t = deleteTarget.value;
+  if (!t) return;
+  deleting.value = true;
+  deleteError.value = null;
+  try {
+    if (t.kind === "video") {
+      await endpoints.deleteVideo(t.video.id, deleteFromPeertube.value);
+      videos.value = videos.value.filter((x) => x.id !== t.video.id);
+    } else {
+      await endpoints.deleteChannel(t.channel.id, deleteFromPeertube.value);
+      channels.value = channels.value.filter((c) => c.id !== t.channel.id);
+      videos.value = videos.value.filter((v) => v.channel_id !== t.channel.id);
+      delete expanded[t.channel.id];
+      persistExpanded();
+    }
+    deleteTarget.value = null;
+  } catch (e) {
+    deleteError.value = (e as Error).message;
+  } finally {
+    deleting.value = false;
+  }
+}
 </script>
 
 <template>
@@ -335,6 +387,14 @@ const summaryEntryOrder = STATUSES;
       >
         {{ isExpanded(g.channel.id) ? "Collapse" : "Expand" }}
       </button>
+      <button
+        type="button"
+        class="contrast outline delete"
+        title="Remove channel and all its videos"
+        @click.stop="askDeleteChannel(g)"
+      >
+        Remove
+      </button>
     </header>
 
     <div v-if="isExpanded(g.channel.id)" class="channel-body">
@@ -349,6 +409,7 @@ const summaryEntryOrder = STATUSES;
               <th>Pipeline</th>
               <th>Progress</th>
               <th>Updated</th>
+              <th></th>
             </tr>
           </thead>
           <tbody>
@@ -382,12 +443,63 @@ const summaryEntryOrder = STATUSES;
                 <small v-else class="muted">—</small>
               </td>
               <td><small :title="v.updated_at">{{ relative(v.updated_at) }}</small></td>
+              <td>
+                <button
+                  type="button"
+                  class="contrast outline row-delete"
+                  title="Delete this video"
+                  @click="askDeleteVideo(v, g)"
+                >
+                  Delete
+                </button>
+              </td>
             </tr>
           </tbody>
         </table>
       </div>
     </div>
   </article>
+
+  <!-- ── Delete confirm dialog ──────────────────────────────── -->
+  <dialog :open="deleteTarget !== null">
+    <article v-if="deleteTarget">
+      <header>
+        <strong v-if="deleteTarget.kind === 'video'">Delete video?</strong>
+        <strong v-else>Remove channel?</strong>
+      </header>
+      <p v-if="deleteTarget.kind === 'video'">
+        <code>{{ truncate(deleteTarget.video.title, 80) }}</code>
+        <br />
+        <small class="muted">Channel: {{ deleteTarget.channelName }}</small>
+      </p>
+      <p v-else>
+        <strong>{{ channelDisplayName(deleteTarget.channel) }}</strong>
+        <br />
+        <small class="muted">
+          This will delete the channel mapping and
+          <strong>{{ deleteTarget.videoCount }}</strong>
+          tracked video{{ deleteTarget.videoCount === 1 ? "" : "s" }}
+          (local files and database rows).
+        </small>
+      </p>
+      <label>
+        <input type="checkbox" v-model="deleteFromPeertube" />
+        Also delete
+        <template v-if="deleteTarget.kind === 'channel'">each video</template>
+        <template v-else>the video</template>
+        from PeerTube
+      </label>
+      <p v-if="deleteError" class="error">{{ deleteError }}</p>
+      <footer>
+        <button type="button" class="secondary" :disabled="deleting" @click="cancelDelete">
+          Cancel
+        </button>
+        <button type="button" class="contrast" :disabled="deleting" @click="confirmDelete">
+          {{ deleting ? "Deleting…" : "Delete" }}
+        </button>
+      </footer>
+    </article>
+  </dialog>
 </template>
 
 <style scoped>
@@ -435,6 +547,13 @@ const summaryEntryOrder = STATUSES;
   flex: 1; justify-content: flex-end;
 }
 .toggle { margin: 0; width: auto; flex-shrink: 0; }
+.delete, .row-delete {
+  margin: 0;
+  width: auto;
+  flex-shrink: 0;
+  padding: 0.3rem 0.6rem;
+  font-size: 0.8rem;
+}
 .channel-body { padding: 0.5rem 1rem 1rem; }
 
 .badge {

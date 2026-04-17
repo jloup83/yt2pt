@@ -173,7 +173,8 @@ test("DELETE /api/channels/:id removes the row; 404 when missing; 400 on bad id"
   assert.equal(miss.statusCode, 404);
 
   const ok = await app.inject({ method: "DELETE", url: `/api/channels/${channel.id}` });
-  assert.equal(ok.statusCode, 204);
+  assert.equal(ok.statusCode, 200);
+  assert.equal(ok.json().status, "deleted");
 
   const after = await app.inject({ method: "GET", url: "/api/channels" });
   assert.deepEqual(after.json(), { channels: [] });

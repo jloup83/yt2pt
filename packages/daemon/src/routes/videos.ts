@@ -19,6 +19,7 @@ import {
   normalizeYoutubeVideoUrl,
   type VideoResolver,
 } from "./youtube-video";
+import { deleteVideoById, PeertubeDeleteError } from "../videos/delete";
 
 export interface VideoWithChannel {
   id: number;
@@ -168,6 +169,43 @@ export async function registerVideoRoutes(app: FastifyInstance): Promise<void> {
       return { error: "not found" };
     }
     return row;
+  });
+
+  // ── DELETE /api/videos/:id — delete one video ─────────────────────
+  //
+  // Cancels any in-flight job, removes local files (both downloaded and
+  // converted-for-PT copies), optionally deletes the video from PeerTube
+  // (query `from_peertube=true|false`, default false), and finally drops
+  // the DB row. Returns 204 with the orchestrator result in the body for
+  // clients that care about warnings.
+  app.delete("/api/videos/:id", async (req, reply) => {
+    const id = Number((req.params as { id: string }).id);
+    if (!Number.isInteger(id) || id <= 0) {
+      reply.code(400);
+      return { error: "invalid id" };
+    }
+    const q = (req.query ?? {}) as { from_peertube?: string };
+    const fromPeertube = q.from_peertube === "true" || q.from_peertube === "1";
+
+    try {
+      const result = await deleteVideoById(
+        { db: ctx.db, paths: ctx.paths, logger: ctx.logger, queue: ctx.queue, peertube: ctx.peertube },
+        id,
+        { fromPeertube },
+      );
+      if (!result) {
+        reply.code(404);
+        return { error: "not found" };
+      }
+      reply.code(200);
+      return { status: "deleted", ...result };
+    } catch (err) {
+      if (err instanceof PeertubeDeleteError) {
+        reply.code(502);
+        return { error: err.message, status: err.status };
+      }
+      throw err;
+    }
   });
 
   // ── POST /api/videos — single-video sync ─────────────────────────

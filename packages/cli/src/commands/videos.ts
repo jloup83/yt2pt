@@ -66,3 +66,70 @@ export async function runVideosAdd(
   );
   return 0;
 }
+
+// ── videos delete ───────────────────────────────────────────────────
+
+export interface VideosDeleteOptions {
+  fromPeertube?: boolean;
+  yes?: boolean;
+}
+
+interface VideoDeleteResponse {
+  status: string;
+  id: number;
+  cancelled: boolean;
+  peertube_deleted: boolean | null;
+  warnings: string[];
+}
+
+export async function runVideosDelete(
+  client: ApiClient,
+  id: string,
+  opts: VideosDeleteOptions = {},
+): Promise<number> {
+  const n = Number(id);
+  if (!Number.isInteger(n) || n <= 0) {
+    process.stderr.write(`Error: video id must be a positive integer\n`);
+    return 1;
+  }
+  if (!opts.yes && !isJsonMode()) {
+    const target = opts.fromPeertube ? " AND from PeerTube" : "";
+    const ok = await confirm(`Delete video #${n}${target}? [y/N] `);
+    if (!ok) {
+      process.stdout.write("Aborted.\n");
+      return 1;
+    }
+  }
+  const query = opts.fromPeertube ? "?from_peertube=true" : "";
+  const res = await client.request<VideoDeleteResponse>(
+    `/api/videos/${n}${query}`,
+    { method: "DELETE" },
+  );
+  if (isJsonMode()) {
+    printJson(res);
+    return 0;
+  }
+  process.stdout.write(
+    `${paint("✓", "green")} Deleted video #${n}${res.cancelled ? " (in-flight job cancelled)" : ""}${
+      res.peertube_deleted ? " — removed from PeerTube" : ""
+    }\n`,
+  );
+  for (const w of res.warnings ?? []) {
+    process.stdout.write(`  ${paint("!", "yellow")} ${w}\n`);
+  }
+  return 0;
+}
+
+async function confirm(prompt: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    process.stdout.write(prompt);
+    const onData = (buf: Buffer): void => {
+      process.stdin.pause();
+      process.stdin.off("data", onData);
+      const answer = buf.toString("utf8").trim().toLowerCase();
+      resolve(answer === "y" || answer === "yes");
+    };
+    process.stdin.resume();
+    process.stdin.on("data", onData);
+  });
+}
