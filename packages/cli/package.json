@@ -2,16 +2,16 @@
   "name": "yt2pt",
   "version": "1.0.0-beta",
   "private": true,
-  "description": "Download YouTube videos with metadata and thumbnails for PeerTube migration",
+  "description": "Command-line client for the yt2ptd daemon (YouTube → PeerTube migration)",
   "main": "dist/index.js",
   "bin": {
     "yt2pt": "dist/index.js"
   },
   "scripts": {
-    "build": "tsc -b"
+    "build": "tsc -b",
+    "test": "tsx --test 'src/**/*.test.ts'"
   },
-  "dependencies": {
-    "@yt2pt/shared": "1.0.0-beta",
-    "@yt2pt/daemon": "1.0.0-beta"
+  "devDependencies": {
+    "tsx": "^4.21.0"
   }
 }

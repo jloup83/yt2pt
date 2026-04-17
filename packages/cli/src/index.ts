@@ -1,131 +1,180 @@
 #!/usr/bin/env node
-
 import { readFileSync } from "node:fs";
-import { access, readdir } from "node:fs/promises";
-import { join, resolve } from "node:path";
-import { loadConfig, printConfig, createLogger, ensureDirs } from "@yt2pt/shared";
-import { downloadFromYouTube, convertMetadata, uploadToPeertube } from "@yt2pt/daemon";
+import { resolve } from "node:path";
+import { ApiClient, ApiError, DaemonUnreachableError, resolveDaemonUrl } from "./api/client";
+import { parseArgs } from "./argv";
+import { runStatus } from "./commands/status";
+import { runConfigGet, runConfigSet } from "./commands/config";
+import { runToken } from "./commands/token";
+import {
+  runChannelsAdd,
+  runChannelsList,
+  runChannelsRemove,
+  runChannelsSync,
+} from "./commands/channels";
+import { runVideosList } from "./commands/videos";
+import { setJsonMode, paint } from "./output/format";
 
 const { version: VERSION } = JSON.parse(
-  readFileSync(resolve(__dirname, "..", "package.json"), "utf-8")
-);
+  readFileSync(resolve(__dirname, "..", "package.json"), "utf-8"),
+) as { version: string };
 
-const HELP = `yt2pt v${VERSION} — Download YouTube videos and upload to PeerTube
+const HELP = `yt2pt v${VERSION} — CLI client for the yt2ptd daemon
 
 Usage:
-  yt2pt <youtube-url>                 Download video from YouTube
-  yt2pt <youtube-url> --download-only Download video from YouTube
-  yt2pt --convert-metadata            Convert all downloaded metadata for PeerTube
-  yt2pt --upload-only                 Upload all converted videos to PeerTube
-  yt2pt <youtube-url> --upload-only   Upload a specific video to PeerTube
-  yt2pt -h, --help                    Show this help
-  yt2pt -v, --version                 Show version
+  yt2pt status                          Show daemon + PeerTube connection status
+  yt2pt config                          Show current configuration
+  yt2pt config <section.key> <value>    Set a configuration value
+  yt2pt token <username> <password>     Acquire a PeerTube API token
+  yt2pt channels list                   List configured channel mappings
+  yt2pt channels add <yt-url> <pt-id>   Add a YouTube → PeerTube mapping
+  yt2pt channels remove <id>            Remove a channel mapping
+  yt2pt channels sync <id>              Trigger sync for a channel (live progress)
+  yt2pt videos                          List tracked videos
+  yt2pt videos --status=UPLOADING       Filter by status
+  yt2pt videos --channel=<id>           Filter by channel
+  yt2pt help                            Show this help
+  yt2pt version                         Show version
 
-Examples:
-  yt2pt https://www.youtube.com/watch?v=q5Mq4kEa7pA
-  yt2pt https://youtu.be/q5Mq4kEa7pA
+Global flags:
+  --daemon-url=<url>                    Override daemon URL (default: http://localhost:8090)
+  --json                                Emit machine-readable JSON output
+  --no-watch                            (channels sync) Don't stream live progress
+  -h, --help                            Show this help
+  -v, --version                         Show version
+
+Environment:
+  YT2PT_DAEMON_URL                      Default daemon URL
+  NO_COLOR / YT2PT_NO_COLOR             Disable colored output
 `;
 
-function isYouTubeUrl(url: string): boolean {
+async function main(): Promise<number> {
+  let parsed;
   try {
-    const parsed = new URL(url);
-    return /^(www\.)?(youtube\.com|youtu\.be|m\.youtube\.com|music\.youtube\.com)$/.test(parsed.hostname);
-  } catch {
-    return false;
-  }
-}
-
-async function findYtDlpBinary(binDir: string): Promise<string> {
-  try {
-    await access(binDir);
-  } catch {
-    throw new Error(`bin/ directory not found at ${binDir}`);
-  }
-
-  let platform: string;
-  switch (process.platform) {
-    case "darwin":
-      platform = "macos";
-      break;
-    case "linux":
-      platform = "linux";
-      break;
-    case "win32":
-      throw new Error("Windows is not supported yet");
-    default:
-      throw new Error(`Unsupported platform: ${process.platform}`);
-  }
-
-  const entries = await readdir(binDir);
-  const ytdlp = entries.find((f) => f.startsWith(`yt-dlp-${platform}-`));
-  if (!ytdlp) {
-    throw new Error(`No yt-dlp binary found for ${platform} in ${binDir}`);
-  }
-  return join(binDir, ytdlp);
-}
-
-async function main(): Promise<void> {
-  const args = process.argv.slice(2);
-
-  if (args.length === 0 || args.includes("-h") || args.includes("--help")) {
-    console.log(HELP);
-    process.exit(0);
-  }
-
-  if (args.includes("-v") || args.includes("--version")) {
-    console.log(`yt2pt v${VERSION}`);
-    process.exit(0);
-  }
-
-  const flags = args.filter((a) => a.startsWith("--"));
-  const positional = args.filter((a) => !a.startsWith("-"));
-  const url = positional[0];
-
-  const hasDownloadOnly = flags.includes("--download-only");
-  const hasConvertMetadata = flags.includes("--convert-metadata");
-  const hasUploadOnly = flags.includes("--upload-only");
-
-  // Load and display configuration
-  const { config, overrides, paths } = loadConfig();
-  ensureDirs(paths);
-  const log = createLogger(config);
-  printConfig(config, overrides, log);
-  log.debug(`Path mode: ${paths.mode}`);
-  log.debug(`Config path: ${paths.configPath}`);
-
-  // ── Convert metadata ──────────────────────────────────────────────
-  if (hasConvertMetadata) {
-    await convertMetadata(config, log);
-    process.exit(0);
-  }
-
-  // ── Upload only ───────────────────────────────────────────────────
-  if (hasUploadOnly) {
-    await uploadToPeertube(config, log);
-    process.exit(0);
-  }
-
-  // ── Download (default) ────────────────────────────────────────────
-  if (!url) {
-    console.error("Error: A YouTube URL is required for download mode");
-    process.exit(1);
-  }
-
-  if (!isYouTubeUrl(url)) {
-    console.error(`Error: Invalid YouTube URL: ${url}`);
-    process.exit(1);
-  }
-
-  let ytdlp: string;
-  try {
-    ytdlp = await findYtDlpBinary(paths.binDir);
-    log.debug(`yt-dlp binary: ${ytdlp}`);
+    parsed = parseArgs(process.argv.slice(2));
   } catch (err) {
-    log.error(`${(err as Error).message}`);
-    process.exit(1);
+    process.stderr.write(`Error: ${(err as Error).message}\n`);
+    return 1;
+  }
+  const { positional, flags } = parsed;
+
+  if (flags.help === true || positional[0] === "help") {
+    process.stdout.write(HELP);
+    return 0;
+  }
+  if (flags.version === true || positional[0] === "version") {
+    process.stdout.write(`yt2pt v${VERSION}\n`);
+    return 0;
+  }
+  if (positional.length === 0) {
+    process.stdout.write(HELP);
+    return 0;
   }
 
-  await downloadFromYouTube(ytdlp, url, config, log);
+  if (flags.json === true) setJsonMode(true);
+
+  const daemonUrl = resolveDaemonUrl(
+    typeof flags["daemon-url"] === "string" ? (flags["daemon-url"] as string) : undefined,
+  );
+  const client = new ApiClient({ baseUrl: daemonUrl });
+
+  const [cmd, ...rest] = positional;
+
+  try {
+    return await dispatch(cmd, rest, flags, client);
+  } catch (err) {
+    return handleError(err, daemonUrl);
+  }
 }
 
-main();
+async function dispatch(
+  cmd: string,
+  rest: string[],
+  flags: Record<string, string | boolean>,
+  client: ApiClient,
+): Promise<number> {
+  switch (cmd) {
+    case "status":
+      return runStatus(client);
+
+    case "config":
+      if (rest.length === 0) return runConfigGet(client);
+      if (rest.length === 2) return runConfigSet(client, rest[0], rest[1]);
+      process.stderr.write(`Error: 'config' takes either 0 or 2 arguments\n`);
+      return 1;
+
+    case "token":
+      if (rest.length !== 2) {
+        process.stderr.write(`Error: 'token' requires <username> and <password>\n`);
+        return 1;
+      }
+      return runToken(client, rest[0], rest[1]);
+
+    case "channels": {
+      const [sub, ...subArgs] = rest;
+      if (!sub) {
+        process.stderr.write(`Error: 'channels' requires a subcommand (list|add|remove|sync)\n`);
+        return 1;
+      }
+      switch (sub) {
+        case "list":
+          return runChannelsList(client);
+        case "add":
+          if (subArgs.length !== 2) {
+            process.stderr.write(`Error: 'channels add' requires <yt-url> and <pt-id>\n`);
+            return 1;
+          }
+          return runChannelsAdd(client, subArgs[0], subArgs[1]);
+        case "remove":
+        case "rm":
+          if (subArgs.length !== 1) {
+            process.stderr.write(`Error: 'channels remove' requires <id>\n`);
+            return 1;
+          }
+          return runChannelsRemove(client, subArgs[0]);
+        case "sync":
+          if (subArgs.length !== 1) {
+            process.stderr.write(`Error: 'channels sync' requires <id>\n`);
+            return 1;
+          }
+          return runChannelsSync(client, subArgs[0], {
+            watch: flags["no-watch"] !== true,
+          });
+        default:
+          process.stderr.write(`Error: unknown 'channels' subcommand '${sub}'\n`);
+          return 1;
+      }
+    }
+
+    case "videos":
+      return runVideosList(client, {
+        status: typeof flags.status === "string" ? (flags.status as string) : undefined,
+        channel: typeof flags.channel === "string" ? (flags.channel as string) : undefined,
+        page: typeof flags.page === "string" ? Number(flags.page) : undefined,
+        perPage: typeof flags["per-page"] === "string" ? Number(flags["per-page"]) : undefined,
+      });
+
+    default:
+      process.stderr.write(`Error: unknown command '${cmd}'\n\n`);
+      process.stdout.write(HELP);
+      return 1;
+  }
+}
+
+function handleError(err: unknown, daemonUrl: string): number {
+  if (err instanceof DaemonUnreachableError) {
+    process.stderr.write(
+      `${paint("✗", "red")} Could not reach yt2ptd at ${daemonUrl}\n` +
+      `  Is the daemon running? Start it with 'yt2ptd' (or 'systemctl start yt2pt').\n`,
+    );
+    return 2;
+  }
+  if (err instanceof ApiError) {
+    process.stderr.write(`${paint("✗", "red")} ${err.message}\n`);
+    return 1;
+  }
+  process.stderr.write(`${paint("✗", "red")} ${(err as Error).message ?? String(err)}\n`);
+  return 1;
+}
+
+void main().then((code) => { process.exit(code); });
