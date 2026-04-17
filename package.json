@@ -11,7 +11,8 @@
   "scripts": {
     "build": "tsc -b",
     "clean": "tsc -b --clean",
-    "start": "node packages/cli/dist/index.js"
+    "start": "node packages/cli/dist/index.js",
+    "test": "npm test --workspaces --if-present"
   },
   "repository": {
     "type": "git",
