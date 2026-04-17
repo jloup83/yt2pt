@@ -5,9 +5,15 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
-    "build": "tsc -b"
+    "build": "tsc -b",
+    "test": "tsx --test src/**/*.test.ts"
   },
   "dependencies": {
-    "@yt2pt/shared": "1.0.0-beta"
+    "@yt2pt/shared": "1.0.0-beta",
+    "better-sqlite3": "^12.9.0"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "tsx": "^4.21.0"
   }
 }
