@@ -81,6 +81,51 @@ export interface VideoListResponse {
   per_page: number;
 }
 
+// ── Settings ────────────────────────────────────────────────────────
+
+export interface Yt2ptSection {
+  data_dir: string;
+  log_dir: string;
+  log_level: string;
+  overwrite_existing: boolean;
+  skip_downloaded: boolean;
+  remove_video_after_upload: boolean;
+  remove_video_after_metadata_conversion: boolean;
+}
+export interface HttpSection { port: number; bind: string }
+export interface WorkersSection {
+  download_concurrency: number;
+  convert_concurrency: number;
+  upload_concurrency: number;
+}
+export interface YtdlpSection {
+  format: string;
+  merge_output_format: string;
+  thumbnail_format: string;
+}
+export interface PeertubeSection {
+  instance_url: string;
+  api_token: string;
+  channel_id: string;
+  privacy: string;
+  language: string;
+  licence: string;
+  comments_policy: string;
+  wait_transcoding: boolean;
+  generate_transcription: boolean;
+}
+export interface Settings {
+  yt2pt: Yt2ptSection;
+  http: HttpSection;
+  workers: WorkersSection;
+  ytdlp: YtdlpSection;
+  peertube: PeertubeSection;
+}
+export type SettingsPatch = {
+  [K in keyof Settings]?: Partial<Settings[K]>;
+};
+export interface TokenResponse { success: boolean; token?: string; error?: string }
+
 export const endpoints = {
   health: () => api.get<HealthResponse>("/health"),
   peertubeStatus: () => api.get<PeertubeStatus>("/peertube/status"),
@@ -89,4 +134,8 @@ export const endpoints = {
     const qs = params.toString();
     return api.get<VideoListResponse>(`/videos${qs ? `?${qs}` : ""}`);
   },
+  getSettings: () => api.get<Settings>("/settings"),
+  updateSettings: (patch: SettingsPatch) => api.put<Settings>("/settings", patch),
+  acquireToken: (username: string, password: string) =>
+    api.post<TokenResponse>("/settings/token", { username, password }),
 };
