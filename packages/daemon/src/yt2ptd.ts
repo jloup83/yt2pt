@@ -4,6 +4,7 @@ import { resolve } from "node:path";
 import { loadConfig, createLogger, ensureDirs } from "@yt2pt/shared";
 import { openDatabase } from "./db";
 import { buildServer } from "./server";
+import { JobQueue } from "./queue";
 
 async function main(): Promise<void> {
   const { config, paths } = loadConfig();
@@ -11,6 +12,22 @@ async function main(): Promise<void> {
 
   const logger = createLogger(config);
   const db = openDatabase(paths);
+
+  // Placeholder processors — real implementations land in #57.
+  const notImplemented = async (): Promise<void> => {
+    throw new Error("worker not yet implemented (see #57)");
+  };
+  const queue = new JobQueue({
+    db,
+    config,
+    logger,
+    processors: {
+      download: notImplemented,
+      convert: notImplemented,
+      upload: notImplemented,
+    },
+  });
+  queue.start();
 
   const webRoot = process.env.YT2PT_WEB_ROOT
     ? resolve(process.env.YT2PT_WEB_ROOT)
@@ -21,6 +38,7 @@ async function main(): Promise<void> {
   const shutdown = async (signal: string): Promise<void> => {
     logger.info(`Received ${signal}, shutting down...`);
     try {
+      await queue.stop();
       await app.close();
       db.close();
       logger.info("Shutdown complete.");
