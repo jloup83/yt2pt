@@ -85,7 +85,8 @@ function deepMerge(defaults: Record<string, unknown>, overrides: Record<string, 
 }
 
 export function loadConfig(): { config: Config; overrides: Set<string> } {
-  const configPath = resolve(__dirname, "..", "yt2pt.conf.json");
+  // From packages/shared/dist/ back up to repo root
+  const configPath = resolve(__dirname, "..", "..", "..", "yt2pt.conf.json");
   const overrides = new Set<string>();
 
   let userConfig: Record<string, unknown> = {};

@@ -3,11 +3,8 @@
 import { readFileSync } from "node:fs";
 import { access, readdir } from "node:fs/promises";
 import { join, resolve } from "node:path";
-import { loadConfig, printConfig } from "./config";
-import { createLogger } from "./logger";
-import { downloadFromYouTube } from "./download";
-import { convertMetadata } from "./convert";
-import { uploadToPeertube } from "./upload";
+import { loadConfig, printConfig, createLogger } from "@yt2pt/shared";
+import { downloadFromYouTube, convertMetadata, uploadToPeertube } from "@yt2pt/daemon";
 
 const { version: VERSION } = JSON.parse(
   readFileSync(resolve(__dirname, "..", "package.json"), "utf-8")
@@ -39,7 +36,8 @@ function isYouTubeUrl(url: string): boolean {
 }
 
 async function findYtDlpBinary(): Promise<string> {
-  const binDir = resolve(__dirname, "..", "bin");
+  // From packages/cli/dist/ back up to repo root bin/
+  const binDir = resolve(__dirname, "..", "..", "..", "bin");
   try {
     await access(binDir);
   } catch {

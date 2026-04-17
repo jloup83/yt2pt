@@ -1,16 +1,8 @@
 {
-  "compilerOptions": {
-    "rootDir": "./src",
-    "outDir": "./dist",
-    "module": "nodenext",
-    "target": "es2022",
-    "lib": ["es2022"],
-    "types": ["node"],
-    "sourceMap": true,
-    "strict": true,
-    "isolatedModules": true,
-    "skipLibCheck": true,
-    "moduleDetection": "force"
-  },
-  "include": ["src/**/*"]
+  "files": [],
+  "references": [
+    { "path": "./packages/shared" },
+    { "path": "./packages/daemon" },
+    { "path": "./packages/cli" }
+  ]
 }

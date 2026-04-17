@@ -1,5 +1,7 @@
 node_modules/
 dist/
+**/dist/
+*.tsbuildinfo
 data/
 .DS_Store
 yt2pt.conf.json

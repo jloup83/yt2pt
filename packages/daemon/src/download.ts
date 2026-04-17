@@ -1,8 +1,7 @@
 import { execFile } from "node:child_process";
 import { mkdir, writeFile, readdir, rmdir } from "node:fs/promises";
 import { join, resolve, extname } from "node:path";
-import { Config } from "./config";
-import { Logger } from "./logger";
+import { Config, Logger } from "@yt2pt/shared";
 
 // ── Helpers ─────────────────────────────────────────────────────────
 

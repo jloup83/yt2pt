@@ -1,0 +1,13 @@
+{
+  "name": "@yt2pt/daemon",
+  "version": "1.0.0-beta",
+  "private": true,
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -b"
+  },
+  "dependencies": {
+    "@yt2pt/shared": "1.0.0-beta"
+  }
+}
