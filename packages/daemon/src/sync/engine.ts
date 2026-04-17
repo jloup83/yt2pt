@@ -10,6 +10,7 @@ import {
 } from "../db/channels";
 import { getVideoByYoutubeId, insertVideo } from "../db/videos";
 import type { JobQueue } from "../queue";
+import { fetchChannelInfo, type FetchChannelInfoOptions } from "./channel-info";
 
 // ── Types ───────────────────────────────────────────────────────────
 
@@ -43,10 +44,14 @@ export interface SyncEngineOptions {
   logger: Logger;
   queue?: JobQueue;
   ytdlpBinary: string | (() => Promise<string>);
+  /** Data root (for channel_info/ side effects). Optional in tests. */
+  dataDir?: string;
   /** Minimum seconds between two syncs of the same channel. */
   rateLimitSeconds?: number;
   /** Override yt-dlp spawner (tests). */
   spawner?: YtdlpSpawner;
+  /** Override channel-info fetcher (tests). */
+  fetchChannelInfo?: (opts: FetchChannelInfoOptions) => Promise<unknown>;
   /** Progress reporting cadence (entries processed). */
   progressEvery?: number;
 }
@@ -149,6 +154,25 @@ export class SyncEngine extends EventEmitter<SyncEngineEvents> {
 
   private async runSync(channel: Channel, signal: AbortSignal): Promise<SyncResult> {
     const binary = await this.resolveBinary();
+
+    // Refresh on-disk channel info (avatar, banner, metadata.json).
+    // Non-fatal: a failure here should not block video discovery.
+    if (this.opts.dataDir) {
+      const fetcher = this.opts.fetchChannelInfo ?? fetchChannelInfo;
+      try {
+        await fetcher({
+          ytdlp: binary,
+          channelUrl: channel.youtube_channel_url,
+          dataDir: this.opts.dataDir,
+          logger: this.opts.logger,
+          signal,
+        });
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        this.opts.logger.error(`[sync] channel info fetch failed for ${channel.id}: ${msg}`);
+      }
+    }
+
     const spawner = this.opts.spawner ?? defaultSpawn;
     const child = spawner(binary, [
       "--flat-playlist",
