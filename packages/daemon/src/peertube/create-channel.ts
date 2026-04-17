@@ -11,6 +11,7 @@
 import { copyFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import { basename, extname, join, resolve } from "node:path";
 import type { Logger } from "@yt2pt/shared";
+import { youtubeHandle } from "../workers/paths";
 import type { PeertubeConnection } from "./connection";
 
 // ── Payload shape ───────────────────────────────────────────────────
@@ -82,7 +83,8 @@ export function buildPeertubeChannelPayload(
     ?? (ytdlpMeta["channel_description"] as string | undefined)
     ?? "";
 
-  const name = overrides.name?.trim() || slugifyForPeertube(rawName);
+  const handle = youtubeHandle(ytdlpMeta);
+  const name = overrides.name?.trim() || slugifyForPeertube(handle ?? rawName);
   const displayName = (overrides.displayName?.trim() || rawName).slice(0, PT_DISPLAY_MAX);
   const desc = (overrides.description ?? description).slice(0, PT_DESC_MAX);
   const support = (overrides.support ?? `Mirrored from ${channelUrl}`).slice(0, PT_SUPPORT_MAX);

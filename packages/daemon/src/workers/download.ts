@@ -2,7 +2,7 @@ import { execFile } from "node:child_process";
 import { mkdir, writeFile, readdir, rmdir } from "node:fs/promises";
 import { join, resolve, extname } from "node:path";
 import type { Config, Logger, ResolvedPaths } from "@yt2pt/shared";
-import { sanitize, formatDate } from "./paths";
+import { sanitize, formatDate, youtubeHandle } from "./paths";
 
 export interface DownloadResult {
   folderName: string;
@@ -65,7 +65,8 @@ export async function runDownload(
   const rawMeta = JSON.parse(stdout) as Record<string, unknown>;
   onProgress?.(10);
 
-  const channel = sanitize(rawMeta["channel"] as string);
+  const handle = youtubeHandle(rawMeta);
+  const channel = handle ? sanitize(handle) : sanitize(rawMeta["channel"] as string);
   const title = sanitize(rawMeta["title"] as string);
   const publishedDate = formatDate(rawMeta["upload_date"] as string);
   const videoId = rawMeta["id"] as string;

@@ -41,6 +41,22 @@ export function sanitize(name: string): string {
     .replace(/^[_-]+|[_-]+$/g, "");
 }
 
+/**
+ * Return the YouTube `@handle` for a channel as found in yt-dlp's
+ * `uploader_id` field, with the leading `@` stripped. Returns null if the
+ * field is missing or doesn't look like a handle (e.g. a bare UCID).
+ *
+ * This is the canonical identifier we use for both the on-disk channel
+ * folder and the PeerTube channel slug, so they stay aligned with the
+ * YouTube URL the user pasted (e.g. `youtube.com/@hekima01` → `hekima01`).
+ */
+export function youtubeHandle(meta: Record<string, unknown>): string | null {
+  const uid = meta["uploader_id"];
+  if (typeof uid !== "string") return null;
+  const m = /^@([A-Za-z0-9._-]+)$/.exec(uid.trim());
+  return m ? m[1] : null;
+}
+
 export function formatDate(yyyymmdd: string): string {
   return `${yyyymmdd.slice(0, 4)}-${yyyymmdd.slice(4, 6)}-${yyyymmdd.slice(6, 8)}`;
 }
