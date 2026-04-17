@@ -1,0 +1,34 @@
+# yt2pt configuration
+
+[yt2pt]
+data_dir = "data"                             # base directory for downloaded and converted videos
+log_level = "info"                            # error | info | debug
+overwrite_existing = false
+skip_downloaded = true
+remove_video_after_upload = false
+remove_video_after_metadata_conversion = false
+
+[http]
+port = 8090
+bind = "0.0.0.0"
+
+[workers]
+download_concurrency = 1
+convert_concurrency = 1
+upload_concurrency = 1
+
+[ytdlp]
+format = "bv*+ba/b"
+merge_output_format = "mkv"
+thumbnail_format = "jpg"
+
+[peertube]
+instance_url = ""
+api_token = ""
+channel_id = ""
+privacy = "public"                            # public | unlisted | private | internal | password_protected
+language = ""
+licence = ""                                  # e.g. "Attribution - Share Alike"
+comments_policy = "enabled"                   # enabled | disabled | requires_approval
+wait_transcoding = true
+generate_transcription = true

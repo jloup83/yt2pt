@@ -1,5 +1,6 @@
-import { readFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { parse as parseToml, stringify as stringifyToml } from "smol-toml";
 import { Logger } from "./logger";
 
 // ── Interfaces ──────────────────────────────────────────────────────
@@ -11,6 +12,17 @@ interface Yt2ptConfig {
   skip_downloaded: boolean;
   remove_video_after_upload: boolean;
   remove_video_after_metadata_conversion: boolean;
+}
+
+interface HttpConfig {
+  port: number;
+  bind: string;
+}
+
+interface WorkersConfig {
+  download_concurrency: number;
+  convert_concurrency: number;
+  upload_concurrency: number;
 }
 
 interface YtdlpConfig {
@@ -33,6 +45,8 @@ interface PeertubeConfig {
 
 export interface Config {
   yt2pt: Yt2ptConfig;
+  http: HttpConfig;
+  workers: WorkersConfig;
   ytdlp: YtdlpConfig;
   peertube: PeertubeConfig;
 }
@@ -47,6 +61,15 @@ const DEFAULTS: Config = {
     skip_downloaded: true,
     remove_video_after_upload: false,
     remove_video_after_metadata_conversion: false,
+  },
+  http: {
+    port: 8090,
+    bind: "0.0.0.0",
+  },
+  workers: {
+    download_concurrency: 1,
+    convert_concurrency: 1,
+    upload_concurrency: 1,
   },
   ytdlp: {
     format: "bv*+ba/b",
@@ -65,6 +88,15 @@ const DEFAULTS: Config = {
     generate_transcription: true,
   },
 };
+
+// ── Path resolution ─────────────────────────────────────────────────
+
+// From packages/shared/dist/ back up to repo root
+const CONFIG_PATH = resolve(__dirname, "..", "..", "..", "yt2pt.conf.toml");
+
+export function getConfigPath(): string {
+  return CONFIG_PATH;
+}
 
 // ── Loader ──────────────────────────────────────────────────────────
 
@@ -85,16 +117,14 @@ function deepMerge(defaults: Record<string, unknown>, overrides: Record<string, 
 }
 
 export function loadConfig(): { config: Config; overrides: Set<string> } {
-  // From packages/shared/dist/ back up to repo root
-  const configPath = resolve(__dirname, "..", "..", "..", "yt2pt.conf.json");
   const overrides = new Set<string>();
 
   let userConfig: Record<string, unknown> = {};
   try {
-    const raw = readFileSync(configPath, "utf-8");
-    userConfig = JSON.parse(raw) as Record<string, unknown>;
+    const raw = readFileSync(CONFIG_PATH, "utf-8");
+    userConfig = parseToml(raw) as Record<string, unknown>;
   } catch {
-    // No config file or invalid JSON — use defaults
+    // No config file or invalid TOML — use defaults
   }
 
   // Track which keys the user overrode
@@ -109,6 +139,12 @@ export function loadConfig(): { config: Config; overrides: Set<string> } {
 
   const merged = deepMerge(DEFAULTS as unknown as Record<string, unknown>, userConfig) as unknown as Config;
   return { config: merged, overrides };
+}
+
+// ── Writer ──────────────────────────────────────────────────────────
+
+export function saveConfig(config: Config): void {
+  writeFileSync(CONFIG_PATH, stringifyToml(config as unknown as Record<string, unknown>) + "\n", "utf-8");
 }
 
 // ── Printer ─────────────────────────────────────────────────────────
