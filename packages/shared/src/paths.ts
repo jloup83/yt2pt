@@ -36,6 +36,10 @@ function isDevMode(): boolean {
 
 function detectMode(): PathMode {
   if (isDevMode()) return "dev";
+  // System/root mode if the system config file exists. This covers both
+  // the classic case (running as root) and a systemd service running as
+  // a dedicated non-root user (e.g. `yt2pt`) that has no writable home.
+  if (existsSync("/etc/yt2pt/yt2pt.conf.toml")) return "root";
   const uid = typeof process.getuid === "function" ? process.getuid() : -1;
   return uid === 0 ? "root" : "user";
 }
