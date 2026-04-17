@@ -29,3 +29,6 @@ export type {
   AcquireTokenResult,
   PeertubeConnectionOptions,
 } from "./peertube/connection";
+
+export { createProcessors, runDownload, runConvert, runUpload, findYtDlpBinary, channelSlugFromFolderName, youtubeUrl } from "./workers";
+export type { ProcessorContext, Processors, DownloadResult } from "./workers";

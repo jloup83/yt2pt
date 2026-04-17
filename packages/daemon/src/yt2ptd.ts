@@ -6,6 +6,7 @@ import { openDatabase } from "./db";
 import { buildServer } from "./server";
 import { JobQueue } from "./queue";
 import { PeertubeConnection } from "./peertube/connection";
+import { createProcessors } from "./workers";
 
 async function main(): Promise<void> {
   const { config, paths } = loadConfig();
@@ -27,20 +28,27 @@ async function main(): Promise<void> {
     }`
   );
 
-  // Placeholder processors — real implementations land in #57.
-  const notImplemented = async (): Promise<void> => {
-    throw new Error("worker not yet implemented (see #57)");
-  };
-  const queue = new JobQueue({
+  // Build queue with real processors. `queue` is created before
+  // processors because processors need a reference to it for progress
+  // reporting; we wire via a lazy holder.
+  let queueRef: JobQueue | null = null;
+  const processors = createProcessors({
     db,
     config,
+    paths,
     logger,
-    processors: {
-      download: notImplemented,
-      convert: notImplemented,
-      upload: notImplemented,
-    },
+    peertube,
+    // Proxy until queue is constructed; JobQueue.reportProgress is only
+    // called from inside a running processor so the ref is always set by then.
+    queue: new Proxy({} as JobQueue, {
+      get: (_t, prop) => {
+        if (!queueRef) throw new Error("queue not initialized");
+        return (queueRef as unknown as Record<string | symbol, unknown>)[prop];
+      },
+    }),
   });
+  const queue = new JobQueue({ db, config, logger, processors });
+  queueRef = queue;
   queue.start();
 
   const webRoot = process.env.YT2PT_WEB_ROOT
