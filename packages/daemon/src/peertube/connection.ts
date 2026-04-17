@@ -79,8 +79,7 @@ export class PeertubeConnection {
     if (this.online && this.getToken()) {
       await this.checkAuth();
     } else {
-      this.authenticated = false;
-      this.username = null;
+      this.setAuth(false, null);
     }
     return this.getStatus();
   }
@@ -90,15 +89,15 @@ export class PeertubeConnection {
   async checkOnline(): Promise<boolean> {
     const url = this.apiUrl("/config");
     if (!this.opts.config.peertube.instance_url) {
-      this.online = false;
+      this.setOnline(false);
       return false;
     }
     try {
       const res = await this.fetch(url, { method: "GET" });
-      this.online = res.ok;
+      this.setOnline(res.ok);
     } catch (err) {
       this.opts.logger.debug(`peertube online check failed: ${errMsg(err)}`);
-      this.online = false;
+      this.setOnline(false);
     }
     return this.online;
   }
@@ -108,8 +107,7 @@ export class PeertubeConnection {
   async checkAuth(): Promise<boolean> {
     const token = this.getToken();
     if (!token) {
-      this.authenticated = false;
-      this.username = null;
+      this.setAuth(false, null);
       return false;
     }
     try {
@@ -117,34 +115,59 @@ export class PeertubeConnection {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (res.status === 401) {
-        this.authenticated = false;
-        this.username = null;
+        this.setAuth(false, null);
         return false;
       }
       if (!res.ok) {
         this.opts.logger.debug(`peertube auth check returned ${res.status}`);
-        this.authenticated = false;
-        this.username = null;
+        this.setAuth(false, null);
         return false;
       }
       const body = (await res.json()) as { username?: string };
-      this.authenticated = true;
-      this.username = body.username ?? null;
+      this.setAuth(true, body.username ?? null);
       return true;
     } catch (err) {
       this.opts.logger.debug(`peertube auth check failed: ${errMsg(err)}`);
-      this.authenticated = false;
-      this.username = null;
+      this.setAuth(false, null);
       return false;
+    }
+  }
+
+  // ── State transitions (log once on change) ───────────────────────
+
+  private setOnline(next: boolean): void {
+    if (this.online === next) return;
+    this.online = next;
+    const url = this.opts.config.peertube.instance_url || "(unset)";
+    if (next) {
+      this.opts.logger.info(`PeerTube online: ${url}`);
+    } else {
+      this.opts.logger.warn(`PeerTube offline: ${url}`);
+    }
+  }
+
+  private setAuth(next: boolean, username: string | null): void {
+    if (this.authenticated === next && this.username === username) return;
+    const wasAuthed = this.authenticated;
+    this.authenticated = next;
+    this.username = username;
+    if (next) {
+      this.opts.logger.info(`PeerTube authenticated as '${username ?? "?"}'`);
+    } else if (wasAuthed) {
+      this.opts.logger.warn(`PeerTube authentication lost`);
     }
   }
 
   // ── Token acquisition (OAuth password grant) ─────────────────────
 
   async acquireToken(username: string, password: string): Promise<AcquireTokenResult> {
+    const logger = this.opts.logger;
+    const url = this.opts.config.peertube.instance_url || "(unset)";
+    logger.debug(`acquireToken: fetching oauth-clients/local from ${url}`);
     try {
       const clientRes = await this.fetch(this.apiUrl("/oauth-clients/local"));
       if (!clientRes.ok) {
+        logger.warn(`acquireToken: oauth-clients/local returned ${clientRes.status}`);
         return { success: false, error: `oauth-clients/local returned ${clientRes.status}` };
       }
       const client = (await clientRes.json()) as { client_id: string; client_secret: string };
@@ -156,6 +179,7 @@ export class PeertubeConnection {
       form.set("username", username);
       form.set("password", password);
 
+      logger.debug(`acquireToken: POST /users/token for '${username}'`);
       const tokenRes = await this.fetch(this.apiUrl("/users/token"), {
         method: "POST",
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -164,23 +188,28 @@ export class PeertubeConnection {
 
       if (!tokenRes.ok) {
         const body = await tokenRes.text().catch(() => "");
+        logger.warn(`acquireToken: users/token returned ${tokenRes.status}: ${body}`);
         return { success: false, error: `users/token returned ${tokenRes.status}: ${body}` };
       }
       const tokenBody = (await tokenRes.json()) as { access_token?: string };
       if (!tokenBody.access_token) {
+        logger.error(`acquireToken: users/token response missing access_token`);
         return { success: false, error: "users/token response missing access_token" };
       }
 
       this.opts.config.peertube.api_token = tokenBody.access_token;
       try {
         saveConfig(this.opts.config, this.opts.configPath);
+        logger.debug(`acquireToken: token persisted to ${this.opts.configPath ?? "(no path)"}`);
       } catch (err) {
+        logger.error(`acquireToken: failed to persist token: ${errMsg(err)}`);
         return { success: false, error: `failed to persist token: ${errMsg(err)}` };
       }
 
       await this.checkAuth();
       return { success: true };
     } catch (err) {
+      logger.error(`acquireToken: request failed: ${errMsg(err)}`);
       return { success: false, error: errMsg(err) };
     }
   }

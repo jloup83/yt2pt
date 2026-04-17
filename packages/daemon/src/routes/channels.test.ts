@@ -43,7 +43,7 @@ function makeCtx(): TestCtx {
   const db = new Database(":memory:");
   db.pragma("foreign_keys = ON");
   runMigrations(db);
-  const logger = { error: () => {}, info: () => {}, debug: () => {} } as unknown as Logger;
+  const logger = { error: () => {}, warn: () => {}, info: () => {}, debug: () => {} } as unknown as Logger;
   // binDir points at an empty dir → findYtDlpBinary throws inside POST and
   // name resolution is skipped (the row still gets inserted).
   const paths: ResolvedPaths = { mode: "dev", configPath: join(dir, "yt2pt.conf.toml"), dataDir: dir, logDir: dir, binDir: join(dir, "empty-bin") };

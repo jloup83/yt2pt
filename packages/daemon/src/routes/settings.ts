@@ -177,12 +177,41 @@ export async function registerSettingsRoutes(app: FastifyInstance): Promise<void
   app.put("/api/settings", async (req, reply) => {
     const errs = validatePatch(req.body, ctx.config);
     if (errs.length > 0) {
+      ctx.logger.warn(
+        `PUT /api/settings rejected: ${errs.length} validation error(s): ` +
+        errs.map((e) => `${e.path || "(root)"}: ${e.message}`).join("; ")
+      );
       reply.code(400);
       return { error: "validation failed", details: errs };
     }
 
     const patch = req.body as PartialConfig;
     const next = mergeConfig(ctx.config, patch);
+
+    // Summarize what's actually changing (at info) with per-key details
+    // at debug. Redact peertube.api_token values.
+    const sections = Object.keys(patch) as Section[];
+    const changedKeys: string[] = [];
+    for (const section of sections) {
+      const sec = patch[section] as Record<string, unknown> | undefined;
+      if (!sec) continue;
+      for (const key of Object.keys(sec)) {
+        const path = `${section}.${key}`;
+        const isSecret = path === "peertube.api_token";
+        const before = (ctx.config[section] as unknown as Record<string, unknown>)[key];
+        const after = sec[key];
+        if (before === after) continue;
+        changedKeys.push(path);
+        const fmt = (v: unknown): string =>
+          isSecret ? (v ? "<set>" : "<empty>") : JSON.stringify(v);
+        ctx.logger.debug(`  ${path}: ${fmt(before)} → ${fmt(after)}`);
+      }
+    }
+    if (changedKeys.length === 0) {
+      ctx.logger.info(`PUT /api/settings: no effective changes`);
+    } else {
+      ctx.logger.info(`PUT /api/settings: updating ${changedKeys.length} key(s): ${changedKeys.join(", ")}`);
+    }
 
     try {
       saveConfig(next, ctx.paths.configPath);
@@ -200,8 +229,13 @@ export async function registerSettingsRoutes(app: FastifyInstance): Promise<void
     Object.assign(ctx.config.ytdlp, next.ytdlp);
     Object.assign(ctx.config.peertube, next.peertube);
 
+    if (changedKeys.length > 0) {
+      ctx.logger.info(`PUT /api/settings: wrote ${ctx.paths.configPath}`);
+    }
+
     // If instance_url changed, force a connection refresh on next tick.
     if (ctx.peertube && patch.peertube && "instance_url" in patch.peertube) {
+      ctx.logger.info(`peertube.instance_url changed → refreshing connection`);
       // fire-and-forget; errors are surfaced via GET /api/peertube later.
       void ctx.peertube.refresh();
     }
@@ -214,18 +248,23 @@ export async function registerSettingsRoutes(app: FastifyInstance): Promise<void
     const username = typeof body?.username === "string" ? body.username : "";
     const password = typeof body?.password === "string" ? body.password : "";
     if (!username || !password) {
+      ctx.logger.warn(`POST /api/settings/token rejected: username and password are required`);
       reply.code(400);
       return { success: false, error: "username and password are required" };
     }
     if (!ctx.peertube) {
+      ctx.logger.error(`POST /api/settings/token: peertube connection not initialized`);
       reply.code(503);
       return { success: false, error: "peertube connection not initialized" };
     }
+    ctx.logger.info(`Acquiring PeerTube token for user '${username}' at ${ctx.config.peertube.instance_url || "(unset)"}`);
     const result = await ctx.peertube.acquireToken(username, password);
     if (!result.success) {
+      ctx.logger.warn(`Token acquisition failed for '${username}': ${result.error ?? "authentication failed"}`);
       reply.code(401);
       return { success: false, error: result.error ?? "authentication failed" };
     }
+    ctx.logger.info(`Token acquired for '${username}' and persisted to ${ctx.paths.configPath}`);
     return { success: true, token: TOKEN_MASK };
   });
 }

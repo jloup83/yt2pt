@@ -26,7 +26,7 @@ function makeConfig(peertubeChannelId = ""): Config {
 
 function silentLogger(): Logger {
   return {
-    info: () => {}, error: () => {}, debug: () => {},
+    info: () => {}, warn: () => {}, error: () => {}, debug: () => {},
   } as unknown as Logger;
 }
 

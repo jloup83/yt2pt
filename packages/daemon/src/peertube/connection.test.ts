@@ -7,7 +7,7 @@ import type { Config, Logger } from "@yt2pt/shared";
 import { PeertubeConnection } from "./connection";
 
 function silentLogger(): Logger {
-  return { error: () => {}, info: () => {}, debug: () => {} } as unknown as Logger;
+  return { error: () => {}, warn: () => {}, info: () => {}, debug: () => {} } as unknown as Logger;
 }
 
 function baseConfig(token = ""): Config {

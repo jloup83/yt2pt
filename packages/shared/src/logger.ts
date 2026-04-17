@@ -4,7 +4,7 @@ import type { Config } from "./config";
 
 // ── Log levels ──────────────────────────────────────────────────────
 
-const LOG_LEVELS = { error: 0, info: 1, debug: 2 } as const;
+const LOG_LEVELS = { error: 0, warn: 1, info: 2, debug: 3 } as const;
 type LogLevel = keyof typeof LOG_LEVELS;
 
 // ── Colors (when terminal supports it) ──────────────────────────────
@@ -34,6 +34,12 @@ export class Logger {
   error(message: string): void {
     this.writeFile("ERROR", message);
     process.stderr.write(`${colors.red}[ERROR]${colors.reset} ${message}\n`);
+  }
+
+  warn(message: string): void {
+    if (this.level < LOG_LEVELS.warn) return;
+    this.writeFile("WARN", message);
+    process.stderr.write(`${colors.yellow}[WARN]${colors.reset}  ${message}\n`);
   }
 
   info(message: string): void {

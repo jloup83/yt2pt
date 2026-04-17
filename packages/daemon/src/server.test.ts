@@ -23,7 +23,7 @@ function makeCtx() {
   } as unknown as Config;
 
   const logger = {
-    error: () => {}, info: () => {}, debug: () => {},
+    error: () => {}, warn: () => {}, info: () => {}, debug: () => {},
   } as unknown as Logger;
 
   const paths: ResolvedPaths = {
