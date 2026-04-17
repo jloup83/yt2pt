@@ -6,6 +6,7 @@ import type { Database } from "better-sqlite3";
 import type { Config, Logger, ResolvedPaths } from "@yt2pt/shared";
 import type { PeertubeConnection } from "./peertube/connection";
 import { registerSettingsRoutes } from "./routes/settings";
+import { registerPeertubeRoutes } from "./routes/peertube";
 
 export interface ServerContext {
   config: Config;
@@ -39,6 +40,9 @@ export function buildServer(ctx: ServerContext, opts: BuildServerOptions = {}): 
 
   // Settings API (GET/PUT /api/settings, POST /api/settings/token).
   app.register(registerSettingsRoutes);
+
+  // PeerTube status + channels API.
+  app.register(registerPeertubeRoutes);
 
   // Static Vue build — mounted only if the directory exists.
   if (opts.webRoot && existsSync(opts.webRoot)) {
