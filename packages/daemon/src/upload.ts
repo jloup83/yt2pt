@@ -165,7 +165,7 @@ export async function uploadToPeertube(config: Config, log: Logger): Promise<voi
   const { instance_url, api_token } = config.peertube;
 
   if (!instance_url) {
-    log.error("peertube.instance_url is not configured — set it in yt2pt.conf.json");
+    log.error("peertube.instance_url is not configured — set it in yt2pt.conf.toml");
     process.exit(1);
   }
   if (!api_token) {

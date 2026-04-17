@@ -72,22 +72,19 @@ chmod +x bin/yt-dlp-linux-*
 
 ## PeerTube Authentication
 
-Before uploading videos, you need to configure your PeerTube credentials in `yt2pt.conf.json`.
+Before uploading videos, you need to configure your PeerTube credentials in `yt2pt.conf.toml`.
 
 ### 1. Create your config file
 
 ```bash
-cp yt2pt.conf.example.json yt2pt.conf.json
+cp yt2pt.conf.example.toml yt2pt.conf.toml
 ```
 
 Set your instance URL:
 
-```json
-{
-  "peertube": {
-    "instance_url": "https://your-instance.example.com"
-  }
-}
+```toml
+[peertube]
+instance_url = "https://your-instance.example.com"
 ```
 
 ### 2. Get your API token
@@ -110,8 +107,7 @@ API="https://your-instance.example.com/api/v1" && \
     --data username="$USER" \
     --data-urlencode password="$PASS" \
     | jq -r .access_token) && \
-  jq --arg t "$TOKEN" '.peertube.api_token = $t' yt2pt.conf.json > tmp.$$.json && \
-  mv tmp.$$.json yt2pt.conf.json && \
+  sed -i.bak -E "s|^api_token = .*|api_token = \"$TOKEN\"|" yt2pt.conf.toml && rm yt2pt.conf.toml.bak && \
   echo "Token set successfully"
 ```
 
@@ -135,14 +131,11 @@ API="https://your-instance.example.com/api/v1" && \
      | jq -r .access_token
    ```
 
-3. Copy the token into `yt2pt.conf.json`:
+3. Copy the token into `yt2pt.conf.toml`:
 
-   ```json
-   {
-     "peertube": {
-       "api_token": "YOUR_ACCESS_TOKEN"
-     }
-   }
+   ```toml
+   [peertube]
+   api_token = "YOUR_ACCESS_TOKEN"
    ```
 
 > **Note:** Access tokens expire after ~4 hours. You will need to regenerate the token when it expires.
@@ -155,12 +148,9 @@ curl -s https://your-instance.example.com/api/v1/accounts/YOUR_USERNAME/video-ch
 
 Set the channel ID in your config:
 
-```json
-{
-  "peertube": {
-    "channel_id": "YOUR_CHANNEL_ID"
-  }
-}
+```toml
+[peertube]
+channel_id = "YOUR_CHANNEL_ID"
 ```
 
 ## Usage

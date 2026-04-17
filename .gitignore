@@ -4,5 +4,6 @@ dist/
 *.tsbuildinfo
 data/
 .DS_Store
-yt2pt.conf.json
+yt2pt.conf.toml
 yt2pt.log
+yt2pt.conf.json
