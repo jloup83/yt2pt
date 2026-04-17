@@ -32,3 +32,6 @@ export type {
 
 export { createProcessors, runDownload, runConvert, runUpload, findYtDlpBinary, channelSlugFromFolderName, youtubeUrl } from "./workers";
 export type { ProcessorContext, Processors, DownloadResult } from "./workers";
+
+export { registerSettingsRoutes, redactConfig, validatePatch, mergeConfig } from "./routes/settings";
+export type { ValidationError } from "./routes/settings";

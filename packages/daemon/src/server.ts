@@ -5,6 +5,7 @@ import { existsSync } from "node:fs";
 import type { Database } from "better-sqlite3";
 import type { Config, Logger, ResolvedPaths } from "@yt2pt/shared";
 import type { PeertubeConnection } from "./peertube/connection";
+import { registerSettingsRoutes } from "./routes/settings";
 
 export interface ServerContext {
   config: Config;
@@ -35,6 +36,9 @@ export function buildServer(ctx: ServerContext, opts: BuildServerOptions = {}): 
     status: "ok",
     version: process.env.npm_package_version ?? "dev",
   }));
+
+  // Settings API (GET/PUT /api/settings, POST /api/settings/token).
+  app.register(registerSettingsRoutes);
 
   // Static Vue build — mounted only if the directory exists.
   if (opts.webRoot && existsSync(opts.webRoot)) {
