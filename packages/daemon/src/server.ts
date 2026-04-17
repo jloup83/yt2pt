@@ -7,6 +7,7 @@ import type { Config, Logger, ResolvedPaths } from "@yt2pt/shared";
 import type { PeertubeConnection } from "./peertube/connection";
 import type { JobQueue } from "./queue";
 import type { SyncEngine } from "./sync";
+import type { VideoResolver } from "./routes/youtube-video";
 import { registerSettingsRoutes } from "./routes/settings";
 import { registerPeertubeRoutes } from "./routes/peertube";
 import { registerChannelRoutes } from "./routes/channels";
@@ -21,6 +22,8 @@ export interface ServerContext {
   peertube?: PeertubeConnection;
   queue?: JobQueue;
   sync?: SyncEngine;
+  /** Test-only override for single-video YouTube metadata resolution. */
+  videoResolver?: VideoResolver;
 }
 
 export interface BuildServerOptions {
