@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
-import { resolve } from "node:path";
-import { loadConfig, createLogger, ensureDirs } from "@yt2pt/shared";
+import { resolve, join } from "node:path";
+import { loadConfig, createLogger, ensureDirs, rotateLogFile } from "@yt2pt/shared";
 import { openDatabase } from "./db";
 import { buildServer } from "./server";
 import { JobQueue } from "./queue";
@@ -12,6 +12,9 @@ import { SyncEngine } from "./sync";
 async function main(): Promise<void> {
   const { config, paths } = loadConfig();
   ensureDirs(paths);
+
+  // Archive the previous run's log (if any) before we open a fresh one.
+  rotateLogFile(join(paths.logDir, "yt2pt.log"));
 
   const logger = createLogger(config);
   const db = openDatabase(paths);

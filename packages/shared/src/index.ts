@@ -3,3 +3,4 @@ export type { Config } from "./config";
 export { createLogger, Logger } from "./logger";
 export { resolvePaths, ensureDirs } from "./paths";
 export type { ResolvedPaths, PathMode, PathOverrides } from "./paths";
+export { rotateLogFile } from "./rotate";

@@ -63,8 +63,10 @@ function defaultsFor(mode: PathMode): Omit<ResolvedPaths, "mode"> {
     case "dev":
       return {
         configPath: join(REPO_ROOT, "yt2pt.conf.toml"),
-        dataDir: join(REPO_ROOT, "data"),
-        logDir: join(REPO_ROOT, "data"),
+        // Stable, separated dev-mode scratch paths so a zero-config run
+        // doesn't bleed state into the repo working tree.
+        dataDir: "/tmp/yt2ptd/data",
+        logDir: "/tmp/yt2ptd/logs",
         binDir: join(REPO_ROOT, "bin"),
       };
   }

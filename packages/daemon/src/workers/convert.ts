@@ -108,6 +108,9 @@ export async function runConvert(
 ): Promise<void> {
   if (signal?.aborted) throw new Error("aborted");
 
+  log.info(`[convert] converting metadata → ${targetPath}`);
+  const started = Date.now();
+
   const raw = JSON.parse(readFileSync(join(sourcePath, "metadata.json"), "utf-8")) as Record<string, unknown>;
   await mkdir(targetPath, { recursive: true });
 
@@ -162,4 +165,6 @@ export async function runConvert(
     await rm(sourcePath, { recursive: true, force: true });
     log.info(`Deleted source: ${sourcePath}`);
   }
+
+  log.info(`[convert] conversion complete → ${targetPath} (${Date.now() - started}ms)`);
 }
