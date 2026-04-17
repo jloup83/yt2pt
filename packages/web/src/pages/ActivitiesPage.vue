@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, watch } from "vue";
+import { computed, onMounted, onUnmounted, reactive, ref } from "vue";
 import {
   endpoints,
   type ChannelSummary,
@@ -28,19 +28,57 @@ const STAGE_OF: Record<Status, Stage> = {
 
 // ── State ─────────────────────────────────────────────────────────
 const videos = ref<VideoRow[]>([]);
-const total = ref(0);
-const page = ref(1);
-const perPage = ref(50);
-const sort = ref<"updated_at" | "created_at" | "title">("updated_at");
-const order = ref<"asc" | "desc">("desc");
-
+const channels = ref<ChannelSummary[]>([]);
 const loading = ref(true);
 const err = ref<string | null>(null);
 
-const channels = ref<ChannelSummary[]>([]);
 const channelFilter = ref<string>("");
 const statusFilter = ref<Status[]>([]);
-const flashes = ref<Record<number, number>>({}); // video id -> timeout id
+const flashes = ref<Record<number, number>>({});
+
+// Expand/collapse state, persisted in localStorage and keyed by channel id.
+// Default is collapsed for every channel.
+const EXPAND_KEY = "yt2pt.activities.expanded.v1";
+const expanded = reactive<Record<number, boolean>>(loadExpanded());
+
+function loadExpanded(): Record<number, boolean> {
+  try {
+    const raw = localStorage.getItem(EXPAND_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as unknown;
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      const out: Record<number, boolean> = {};
+      for (const [k, v] of Object.entries(parsed as Record<string, unknown>)) {
+        const n = Number(k);
+        if (Number.isInteger(n) && typeof v === "boolean") out[n] = v;
+      }
+      return out;
+    }
+  } catch {
+    // fall through
+  }
+  return {};
+}
+
+function persistExpanded(): void {
+  try {
+    localStorage.setItem(EXPAND_KEY, JSON.stringify(expanded));
+  } catch {
+    // localStorage unavailable — swallow
+  }
+}
+
+function isExpanded(channelId: number): boolean {
+  // When a single channel is filtered, force-expand it so filtering is useful.
+  if (channelFilter.value && String(channelId) === channelFilter.value) return true;
+  return !!expanded[channelId];
+}
+
+function toggleExpanded(channelId: number): void {
+  expanded[channelId] = !expanded[channelId];
+  if (!expanded[channelId]) delete expanded[channelId];
+  persistExpanded();
+}
 
 // Relative timestamps refresh tick
 const now = ref(Date.now());
@@ -54,13 +92,12 @@ async function load(): Promise<void> {
     const params = new URLSearchParams();
     if (channelFilter.value) params.set("channel", channelFilter.value);
     if (statusFilter.value.length > 0) params.set("status", statusFilter.value.join(","));
-    params.set("page", String(page.value));
-    params.set("per_page", String(perPage.value));
-    params.set("sort", sort.value);
-    params.set("order", order.value);
+    // No pagination in the grouped view — load everything.
+    params.set("per_page", "500");
+    params.set("sort", "upload_date");
+    params.set("order", "desc");
     const res = await endpoints.listVideos(params);
     videos.value = res.videos;
-    total.value = res.total;
   } catch (e) {
     err.value = (e as Error).message;
   } finally {
@@ -73,26 +110,59 @@ async function loadChannels(): Promise<void> {
     const res = await endpoints.listChannels();
     channels.value = res.channels;
   } catch {
-    // Filter dropdown is optional — silent fail is fine.
+    // Filter dropdown is optional.
   }
 }
 
-// Re-query when filters / paging change
-watch([channelFilter, statusFilter, perPage, sort, order], () => {
-  page.value = 1;
-  void load();
+// ── Grouping ──────────────────────────────────────────────────────
+interface ChannelGroup {
+  channel: ChannelSummary;
+  videos: VideoRow[];
+  statusCounts: Record<string, number>;
+  total: number;
+}
+
+/**
+ * Group the currently-loaded videos by channel. We drive the list from
+ * `channels` (not just videos present) so that freshly-created but
+ * not-yet-synced channels still appear with an empty body.
+ *
+ * Applies the channel filter client-side too (server already filters
+ * videos, but we also need to hide whole channel headers).
+ */
+const groups = computed<ChannelGroup[]>(() => {
+  const byId = new Map<number, VideoRow[]>();
+  for (const v of videos.value) {
+    const arr = byId.get(v.channel_id) ?? [];
+    arr.push(v);
+    byId.set(v.channel_id, arr);
+  }
+
+  const filterId = channelFilter.value ? Number(channelFilter.value) : null;
+
+  const out: ChannelGroup[] = [];
+  for (const c of channels.value) {
+    if (filterId !== null && c.id !== filterId) continue;
+    const vids = (byId.get(c.id) ?? []).slice().sort(compareByUploadDateDesc);
+    const statusCounts: Record<string, number> = {};
+    for (const v of vids) statusCounts[v.status] = (statusCounts[v.status] ?? 0) + 1;
+    // When a status filter is active, hide channel blocks with no
+    // matching videos (unless channel filter already pins this channel).
+    if (statusFilter.value.length > 0 && vids.length === 0 && filterId === null) continue;
+    out.push({ channel: c, videos: vids, statusCounts, total: vids.length });
+  }
+  return out;
 });
-watch(page, () => { void load(); });
 
-// ── Pagination helpers ────────────────────────────────────────────
-const totalPages = computed(() => Math.max(1, Math.ceil(total.value / perPage.value)));
-const rangeFrom = computed(() => (total.value === 0 ? 0 : (page.value - 1) * perPage.value + 1));
-const rangeTo = computed(() => Math.min(total.value, page.value * perPage.value));
+function compareByUploadDateDesc(a: VideoRow, b: VideoRow): number {
+  const au = a.upload_date ?? "";
+  const bu = b.upload_date ?? "";
+  if (au !== bu) return au > bu ? -1 : 1;
+  // Secondary: more recently added first.
+  return b.id - a.id;
+}
 
-function prev(): void { if (page.value > 1) page.value -= 1; }
-function next(): void { if (page.value < totalPages.value) page.value += 1; }
-
-// ── Formatting ────────────────────────────────────────────────────
+// ── Pipeline helpers ──────────────────────────────────────────────
 function truncate(s: string | null, n = 60): string {
   if (!s) return "—";
   return s.length > n ? s.slice(0, n - 1) + "…" : s;
@@ -115,9 +185,9 @@ function relative(iso: string): string {
 function stageClass(video: VideoRow, stage: Stage): string {
   const s = video.status as Status;
   const current = STAGE_OF[s];
-  const order: Stage[] = ["download", "convert", "upload"];
-  const curIdx = order.indexOf(current);
-  const thisIdx = order.indexOf(stage);
+  const stages: Stage[] = ["download", "convert", "upload"];
+  const curIdx = stages.indexOf(current);
+  const thisIdx = stages.indexOf(stage);
   if (s === "UPLOADED") return "done";
   if (FAILED.has(s) && current === stage) return "failed";
   if (thisIdx < curIdx) return "done";
@@ -132,7 +202,7 @@ function rowClass(video: VideoRow): string {
   return classes.join(" ");
 }
 
-// ── Real-time row updates via the shared SSE composable ──────────
+// ── Real-time updates ─────────────────────────────────────────────
 const events = useEvents();
 
 function flash(id: number): void {
@@ -158,7 +228,7 @@ function applyVideoUpdate(payload: VideoStatusEvent): void {
 }
 
 events.onVideoUpdate(applyVideoUpdate);
-events.onSyncComplete(() => { void load(); });
+events.onSyncComplete(() => { void Promise.all([loadChannels(), load()]); });
 
 onMounted(async () => {
   await Promise.all([loadChannels(), load()]);
@@ -173,18 +243,30 @@ function toggleStatus(s: Status): void {
   const set = new Set(statusFilter.value);
   if (set.has(s)) set.delete(s); else set.add(s);
   statusFilter.value = Array.from(set) as Status[];
+  void load();
 }
 
 function clearFilters(): void {
   channelFilter.value = "";
   statusFilter.value = [];
+  void load();
 }
+
+function onChannelFilterChange(): void {
+  void load();
+}
+
+function channelDisplayName(c: ChannelSummary): string {
+  return c.youtube_channel_name ?? c.youtube_channel_url;
+}
+
+const summaryEntryOrder = STATUSES;
 </script>
 
 <template>
   <hgroup>
     <h1>Activities</h1>
-    <p>All tracked videos across every mapped channel.</p>
+    <p>Tracked videos grouped by channel. Most recent uploads first.</p>
   </hgroup>
 
   <!-- ── Filter bar ─────────────────────────────────────────── -->
@@ -193,35 +275,11 @@ function clearFilters(): void {
     <div class="grid">
       <label>
         Channel
-        <select v-model="channelFilter">
+        <select v-model="channelFilter" @change="onChannelFilterChange">
           <option value="">All channels</option>
           <option v-for="c in channels" :key="c.id" :value="String(c.id)">
-            {{ c.youtube_channel_name ?? c.youtube_channel_url }}
+            {{ channelDisplayName(c) }}
           </option>
-        </select>
-      </label>
-      <label>
-        Per page
-        <select v-model.number="perPage">
-          <option :value="25">25</option>
-          <option :value="50">50</option>
-          <option :value="100">100</option>
-          <option :value="200">200</option>
-        </select>
-      </label>
-      <label>
-        Sort
-        <select v-model="sort">
-          <option value="updated_at">Updated</option>
-          <option value="created_at">Created</option>
-          <option value="title">Title</option>
-        </select>
-      </label>
-      <label>
-        Order
-        <select v-model="order">
-          <option value="desc">Newest first</option>
-          <option value="asc">Oldest first</option>
         </select>
       </label>
     </div>
@@ -235,77 +293,100 @@ function clearFilters(): void {
     </fieldset>
   </article>
 
-  <!-- ── Table ──────────────────────────────────────────────── -->
-  <article>
-    <header>
-      <strong>Videos</strong>
-      <small class="muted">
-        &nbsp; {{ rangeFrom }}–{{ rangeTo }} of {{ total }}
-      </small>
+  <p v-if="loading" aria-busy="true">Loading…</p>
+  <p v-else-if="err" class="error">{{ err }}</p>
+  <p v-else-if="groups.length === 0">No channels to show.</p>
+
+  <!-- ── Channel blocks ─────────────────────────────────────── -->
+  <article v-for="g in groups" :key="g.channel.id" class="channel-block">
+    <header class="channel-head" @click="toggleExpanded(g.channel.id)">
+      <img
+        v-if="g.channel.avatar_url"
+        :src="g.channel.avatar_url"
+        :alt="`${channelDisplayName(g.channel)} avatar`"
+        class="avatar"
+      />
+      <div v-else class="avatar avatar-placeholder" aria-hidden="true">
+        {{ channelDisplayName(g.channel).slice(0, 2).toUpperCase() }}
+      </div>
+      <div class="channel-title">
+        <strong>{{ channelDisplayName(g.channel) }}</strong>
+        <small class="muted">
+          {{ g.total }} video{{ g.total === 1 ? "" : "s" }}
+        </small>
+      </div>
+      <div class="status-counts">
+        <span
+          v-for="s in summaryEntryOrder"
+          v-show="g.statusCounts[s]"
+          :key="s"
+          class="badge count"
+          :data-status="s"
+          :title="s"
+        >
+          {{ s }} {{ g.statusCounts[s] }}
+        </span>
+      </div>
+      <button
+        type="button"
+        class="secondary outline toggle"
+        :aria-expanded="isExpanded(g.channel.id)"
+        @click.stop="toggleExpanded(g.channel.id)"
+      >
+        {{ isExpanded(g.channel.id) ? "Collapse" : "Expand" }}
+      </button>
     </header>
 
-    <p v-if="loading" aria-busy="true">Loading…</p>
-    <p v-else-if="err" class="error">{{ err }}</p>
-    <p v-else-if="videos.length === 0">No videos tracked yet.</p>
-
-    <div v-else class="overflow-auto">
-      <table>
-        <thead>
-          <tr>
-            <th>Title</th>
-            <th>Channel</th>
-            <th>Status</th>
-            <th>Pipeline</th>
-            <th>Progress</th>
-            <th>Updated</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="v in videos" :key="v.id" :class="rowClass(v)">
-            <td :title="v.title ?? ''">
-              <a :href="`https://www.youtube.com/watch?v=${v.youtube_video_id}`" target="_blank" rel="noopener">
-                {{ truncate(v.title) }}
-              </a>
-            </td>
-            <td><small>{{ v.channel_name ?? "—" }}</small></td>
-            <td>
-              <span
-                class="badge"
-                :data-status="v.status"
-                :title="v.error_message ?? ''"
-              >
-                {{ v.status }}
-              </span>
-            </td>
-            <td>
-              <span class="pipeline" :aria-label="`Pipeline ${v.status}`">
-                <span class="pip" :class="stageClass(v, 'download')" title="Download">DL</span>
-                <span class="arrow">→</span>
-                <span class="pip" :class="stageClass(v, 'convert')" title="Convert">CV</span>
-                <span class="arrow">→</span>
-                <span class="pip" :class="stageClass(v, 'upload')" title="Upload">UP</span>
-              </span>
-            </td>
-            <td>
-              <template v-if="ACTIVE.has(v.status as Status)">
-                <progress :value="v.progress_pct" max="100" />
-                <small class="muted">&nbsp;{{ v.progress_pct }}%</small>
-              </template>
-              <small v-else-if="v.status === 'UPLOADED'" class="muted">100%</small>
-              <small v-else class="muted">—</small>
-            </td>
-            <td><small :title="v.updated_at">{{ relative(v.updated_at) }}</small></td>
-          </tr>
-        </tbody>
-      </table>
+    <div v-if="isExpanded(g.channel.id)" class="channel-body">
+      <p v-if="g.videos.length === 0" class="muted">No videos yet.</p>
+      <div v-else class="overflow-auto">
+        <table>
+          <thead>
+            <tr>
+              <th>Title</th>
+              <th>Uploaded</th>
+              <th>Status</th>
+              <th>Pipeline</th>
+              <th>Progress</th>
+              <th>Updated</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="v in g.videos" :key="v.id" :class="rowClass(v)">
+              <td :title="v.title ?? ''">
+                <a :href="`https://www.youtube.com/watch?v=${v.youtube_video_id}`" target="_blank" rel="noopener">
+                  {{ truncate(v.title) }}
+                </a>
+              </td>
+              <td><small>{{ v.upload_date ?? "—" }}</small></td>
+              <td>
+                <span class="badge" :data-status="v.status" :title="v.error_message ?? ''">
+                  {{ v.status }}
+                </span>
+              </td>
+              <td>
+                <span class="pipeline" :aria-label="`Pipeline ${v.status}`">
+                  <span class="pip" :class="stageClass(v, 'download')" title="Download">DL</span>
+                  <span class="arrow">→</span>
+                  <span class="pip" :class="stageClass(v, 'convert')" title="Convert">CV</span>
+                  <span class="arrow">→</span>
+                  <span class="pip" :class="stageClass(v, 'upload')" title="Upload">UP</span>
+                </span>
+              </td>
+              <td>
+                <template v-if="ACTIVE.has(v.status as Status)">
+                  <progress :value="v.progress_pct" max="100" />
+                  <small class="muted">&nbsp;{{ v.progress_pct }}%</small>
+                </template>
+                <small v-else-if="v.status === 'UPLOADED'" class="muted">100%</small>
+                <small v-else class="muted">—</small>
+              </td>
+              <td><small :title="v.updated_at">{{ relative(v.updated_at) }}</small></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </div>
-
-    <!-- Pagination -->
-    <footer v-if="total > perPage" class="pager">
-      <button type="button" class="secondary outline" :disabled="page <= 1" @click="prev">« Prev</button>
-      <span>Page {{ page }} / {{ totalPages }}</span>
-      <button type="button" class="secondary outline" :disabled="page >= totalPages" @click="next">Next »</button>
-    </footer>
   </article>
 </template>
 
@@ -321,6 +402,41 @@ function clearFilters(): void {
 }
 .chip input { margin: 0; }
 
+.channel-block { padding: 0; }
+.channel-head {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  cursor: pointer;
+  user-select: none;
+  margin: 0;
+}
+.channel-head:hover { background: var(--pico-muted-border-color); }
+.avatar {
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 50%;
+  object-fit: cover;
+  background: var(--pico-muted-border-color);
+  flex-shrink: 0;
+}
+.avatar-placeholder {
+  display: flex; align-items: center; justify-content: center;
+  font-size: 0.85rem; font-weight: 600; opacity: 0.7;
+}
+.channel-title {
+  display: flex; flex-direction: column;
+  min-width: 8rem;
+}
+.channel-title small { opacity: 0.7; }
+.status-counts {
+  display: flex; flex-wrap: wrap; gap: 0.3rem;
+  flex: 1; justify-content: flex-end;
+}
+.toggle { margin: 0; width: auto; flex-shrink: 0; }
+.channel-body { padding: 0.5rem 1rem 1rem; }
+
 .badge {
   display: inline-block;
   font-size: 0.72rem;
@@ -330,6 +446,7 @@ function clearFilters(): void {
   background: var(--pico-muted-border-color);
   white-space: nowrap;
 }
+.badge.count { font-size: 0.68rem; padding: 0.1rem 0.45rem; }
 .badge[data-status="DOWNLOAD_QUEUED"],
 .badge[data-status="CONVERT_QUEUED"],
 .badge[data-status="UPLOAD_QUEUED"]      { background: #ececec; color: #444; }
@@ -373,9 +490,4 @@ progress { width: 8rem; height: 0.6rem; margin: 0; }
 .muted { opacity: 0.75; }
 .error { color: var(--pico-del-color, crimson); }
 .overflow-auto { overflow-x: auto; }
-.pager {
-  display: flex; align-items: center; gap: 0.75rem;
-  margin-top: 0.5rem;
-}
-.pager button { margin: 0; width: auto; }
 </style>

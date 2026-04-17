@@ -90,7 +90,7 @@ test("summarizeChannel counts videos per status", () => {
   insertVideo(ctx.db, { youtube_video_id: "a", channel_id: channel.id, status: "DOWNLOAD_QUEUED" });
   insertVideo(ctx.db, { youtube_video_id: "b", channel_id: channel.id, status: "DOWNLOAD_QUEUED" });
   insertVideo(ctx.db, { youtube_video_id: "c", channel_id: channel.id, status: "UPLOADED" });
-  const sum = summarizeChannel(ctx.db, channel);
+  const sum = summarizeChannel(ctx.db, channel, ctx.paths.dataDir);
   assert.equal(sum.video_count, 3);
   assert.equal(sum.status_summary.DOWNLOAD_QUEUED, 2);
   assert.equal(sum.status_summary.UPLOADED, 1);
@@ -198,5 +198,71 @@ test("POST /api/channels/:id/sync returns 503 without a sync engine, 202 with on
   assert.equal(noSync.statusCode, 503);
 
   await app.close();
+  ctx.cleanup();
+});
+
+// ── Avatar / banner endpoints ───────────────────────────────────────
+
+import { mkdirSync, writeFileSync as _writeFileSync } from "node:fs";
+import { join as _join } from "node:path";
+import { sanitize as _sanitize } from "../workers/paths";
+
+test("GET /api/channels/:id/avatar streams the file; 404 when missing", async () => {
+  const ctx = makeCtx();
+  const channel = insertChannel(ctx.db, {
+    youtube_channel_url: "https://www.youtube.com/@withavatar",
+    youtube_channel_name: "With Avatar",
+    peertube_channel_id: "1",
+  });
+  const app = buildServer(ctx);
+
+  // 404 before the avatar file exists.
+  let res = await app.inject({ method: "GET", url: `/api/channels/${channel.id}/avatar` });
+  assert.equal(res.statusCode, 404);
+
+  // Write a fake avatar.png into the expected location.
+  const slug = _sanitize("With Avatar");
+  const dir = _join(ctx.paths.dataDir, "downloaded_from_youtube", slug, "channel_info");
+  mkdirSync(dir, { recursive: true });
+  const bytes = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]); // PNG magic
+  _writeFileSync(_join(dir, "avatar.png"), bytes);
+
+  res = await app.inject({ method: "GET", url: `/api/channels/${channel.id}/avatar` });
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.headers["content-type"], "image/png");
+  assert.deepEqual(res.rawPayload, bytes);
+
+  // 404 for unknown channel.
+  const miss = await app.inject({ method: "GET", url: "/api/channels/9999/avatar" });
+  assert.equal(miss.statusCode, 404);
+
+  // Banner still missing → 404.
+  const banner = await app.inject({ method: "GET", url: `/api/channels/${channel.id}/banner` });
+  assert.equal(banner.statusCode, 404);
+
+  await app.close();
+  ctx.cleanup();
+});
+
+test("summarizeChannel reports avatar_url / banner_url when assets exist", () => {
+  const ctx = makeCtx();
+  const channel = insertChannel(ctx.db, {
+    youtube_channel_url: "https://www.youtube.com/@summary",
+    youtube_channel_name: "Summary Channel",
+    peertube_channel_id: "2",
+  });
+  // No files yet → both null.
+  let sum = summarizeChannel(ctx.db, channel, ctx.paths.dataDir);
+  assert.equal(sum.avatar_url, null);
+  assert.equal(sum.banner_url, null);
+
+  const slug = _sanitize("Summary Channel");
+  const dir = _join(ctx.paths.dataDir, "downloaded_from_youtube", slug, "channel_info");
+  mkdirSync(dir, { recursive: true });
+  _writeFileSync(_join(dir, "avatar.jpg"), Buffer.from([0xff, 0xd8, 0xff]));
+  sum = summarizeChannel(ctx.db, channel, ctx.paths.dataDir);
+  assert.equal(sum.avatar_url, `/api/channels/${channel.id}/avatar`);
+  assert.equal(sum.banner_url, null);
+
   ctx.cleanup();
 });

@@ -55,8 +55,14 @@ interface Migration {
   up: string;
 }
 
+const SCHEMA_V2 = `
+ALTER TABLE videos ADD COLUMN upload_date TEXT;
+CREATE INDEX IF NOT EXISTS idx_videos_upload_date ON videos(upload_date);
+`;
+
 const MIGRATIONS: Migration[] = [
   { version: 1, up: SCHEMA_V1 },
+  { version: 2, up: SCHEMA_V2 },
 ];
 
 export function runMigrations(db: Database): void {

@@ -1,4 +1,6 @@
 import { execFile } from "node:child_process";
+import { existsSync, statSync, createReadStream } from "node:fs";
+import { join, resolve } from "node:path";
 import type { FastifyInstance } from "fastify";
 import type { ServerContext } from "../server";
 import {
@@ -9,7 +11,7 @@ import {
   listChannels,
   type Channel,
 } from "../db/channels";
-import { findYtDlpBinary } from "../workers/paths";
+import { findYtDlpBinary, sanitize } from "../workers/paths";
 
 // ── YouTube URL validation ──────────────────────────────────────────
 
@@ -76,9 +78,58 @@ export async function resolveYoutubeChannelName(ytdlp: string, url: string): Pro
 export interface ChannelSummary extends Channel {
   video_count: number;
   status_summary: Record<string, number>;
+  avatar_url: string | null;
+  banner_url: string | null;
 }
 
-export function summarizeChannel(db: import("better-sqlite3").Database, channel: Channel): ChannelSummary {
+/**
+ * Slug used when looking up on-disk channel assets written by the
+ * channel-info fetcher (#106). Mirrors `sanitize(meta.channel ?? meta.uploader ?? meta.title)`.
+ * Falls back to null when no name was ever resolved, in which case no
+ * avatar/banner is expected on disk.
+ */
+function channelAssetSlug(channel: Channel): string | null {
+  const name = channel.youtube_channel_name;
+  if (!name) return null;
+  const slug = sanitize(name);
+  return slug || null;
+}
+
+const IMAGE_EXTS = ["jpg", "jpeg", "png", "webp", "gif"] as const;
+const CT: Record<string, string> = {
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  png: "image/png",
+  webp: "image/webp",
+  gif: "image/gif",
+};
+
+/**
+ * Locate `<dataDir>/downloaded_from_youtube/<slug>/channel_info/<kind>.<ext>`
+ * for the first extension that exists on disk. Returns null if not found
+ * or if the channel has no resolved slug.
+ */
+export function findChannelAsset(
+  dataDir: string,
+  channel: Channel,
+  kind: "avatar" | "banner",
+): { path: string; ext: string } | null {
+  const slug = channelAssetSlug(channel);
+  if (!slug) return null;
+  const dir = resolve(dataDir, "downloaded_from_youtube", slug, "channel_info");
+  if (!existsSync(dir)) return null;
+  for (const ext of IMAGE_EXTS) {
+    const p = join(dir, `${kind}.${ext}`);
+    if (existsSync(p)) return { path: p, ext };
+  }
+  return null;
+}
+
+export function summarizeChannel(
+  db: import("better-sqlite3").Database,
+  channel: Channel,
+  dataDir: string,
+): ChannelSummary {
   const rows = db
     .prepare("SELECT status, COUNT(*) AS n FROM videos WHERE channel_id = ? GROUP BY status")
     .all(channel.id) as { status: string; n: number }[];
@@ -88,7 +139,15 @@ export function summarizeChannel(db: import("better-sqlite3").Database, channel:
     status_summary[r.status] = r.n;
     total += r.n;
   }
-  return { ...channel, video_count: total, status_summary };
+  const avatar = findChannelAsset(dataDir, channel, "avatar");
+  const banner = findChannelAsset(dataDir, channel, "banner");
+  return {
+    ...channel,
+    video_count: total,
+    status_summary,
+    avatar_url: avatar ? `/api/channels/${channel.id}/avatar` : null,
+    banner_url: banner ? `/api/channels/${channel.id}/banner` : null,
+  };
 }
 
 // ── Routes ──────────────────────────────────────────────────────────
@@ -98,7 +157,7 @@ export async function registerChannelRoutes(app: FastifyInstance): Promise<void>
 
   app.get("/api/channels", async () => {
     const rows = listChannels(ctx.db);
-    return { channels: rows.map((c) => summarizeChannel(ctx.db, c)) };
+    return { channels: rows.map((c) => summarizeChannel(ctx.db, c, ctx.paths.dataDir)) };
   });
 
   app.post("/api/channels", async (req, reply) => {
@@ -142,7 +201,7 @@ export async function registerChannelRoutes(app: FastifyInstance): Promise<void>
       peertube_channel_id: peertubeId,
     });
     reply.code(201);
-    return summarizeChannel(ctx.db, row);
+    return summarizeChannel(ctx.db, row, ctx.paths.dataDir);
   });
 
   app.delete("/api/channels/:id", async (req, reply) => {
@@ -160,6 +219,41 @@ export async function registerChannelRoutes(app: FastifyInstance): Promise<void>
     reply.code(204);
     return null;
   });
+
+  app.get("/api/channels/:id/avatar", async (req, reply) => {
+    return serveChannelAsset(req, reply, "avatar");
+  });
+
+  app.get("/api/channels/:id/banner", async (req, reply) => {
+    return serveChannelAsset(req, reply, "banner");
+  });
+
+  async function serveChannelAsset(
+    req: import("fastify").FastifyRequest,
+    reply: import("fastify").FastifyReply,
+    kind: "avatar" | "banner",
+  ): Promise<unknown> {
+    const id = Number((req.params as { id: string }).id);
+    if (!Number.isInteger(id) || id <= 0) {
+      reply.code(400);
+      return { error: "invalid id" };
+    }
+    const channel = getChannelById(ctx.db, id);
+    if (!channel) {
+      reply.code(404);
+      return { error: "channel not found" };
+    }
+    const asset = findChannelAsset(ctx.paths.dataDir, channel, kind);
+    if (!asset) {
+      reply.code(404);
+      return { error: `${kind} not available` };
+    }
+    const size = statSync(asset.path).size;
+    reply.header("Content-Type", CT[asset.ext] ?? "application/octet-stream");
+    reply.header("Content-Length", String(size));
+    reply.header("Cache-Control", "public, max-age=300");
+    return reply.send(createReadStream(asset.path));
+  }
 
   app.post("/api/channels/:id/sync", async (req, reply) => {
     const id = Number((req.params as { id: string }).id);

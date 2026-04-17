@@ -462,3 +462,54 @@ test("POST /api/videos returns 502 when yt-dlp metadata fetch fails", async () =
     cleanup();
   }
 });
+
+// ── upload_date sorting (issue #109) ─────────────────────────────────
+
+test("listVideosWithChannel() sorts by upload_date desc (nulls last)", () => {
+  const tc = makeCtx();
+  const ch = insertChannel(tc.ctx.db, {
+    youtube_channel_url: "https://www.youtube.com/@ud",
+    peertube_channel_id: "1",
+  });
+  insertVideo(tc.ctx.db, {
+    youtube_video_id: "old", channel_id: ch.id, title: "old",
+    status: "UPLOADED", upload_date: "2020-01-01",
+  });
+  insertVideo(tc.ctx.db, {
+    youtube_video_id: "new", channel_id: ch.id, title: "new",
+    status: "UPLOADED", upload_date: "2025-12-31",
+  });
+  insertVideo(tc.ctx.db, {
+    youtube_video_id: "nul", channel_id: ch.id, title: "nul",
+    status: "UPLOADED", upload_date: null,
+  });
+
+  const res = listVideosWithChannel(tc.ctx.db, {
+    page: 1, perPage: 50, sort: "upload_date", order: "desc",
+  });
+  assert.deepEqual(res.videos.map((v) => v.youtube_video_id), ["new", "old", "nul"]);
+  tc.cleanup();
+});
+
+test("GET /api/videos accepts sort=upload_date", async () => {
+  const tc = makeCtx();
+  const ch = insertChannel(tc.ctx.db, {
+    youtube_channel_url: "https://www.youtube.com/@ud2",
+    peertube_channel_id: "1",
+  });
+  insertVideo(tc.ctx.db, {
+    youtube_video_id: "a", channel_id: ch.id, status: "UPLOADED", upload_date: "2024-05-01",
+  });
+  insertVideo(tc.ctx.db, {
+    youtube_video_id: "b", channel_id: ch.id, status: "UPLOADED", upload_date: "2024-06-01",
+  });
+
+  const app = buildServer(tc.ctx);
+  const res = await app.inject({ method: "GET", url: "/api/videos?sort=upload_date&order=desc" });
+  assert.equal(res.statusCode, 200);
+  const body = res.json() as { videos: { youtube_video_id: string; upload_date: string | null }[] };
+  assert.equal(body.videos[0].youtube_video_id, "b");
+  assert.equal(body.videos[0].upload_date, "2024-06-01");
+  await app.close();
+  tc.cleanup();
+});
