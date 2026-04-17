@@ -40,11 +40,13 @@ export async function runUpload(
     await readFile(join(videoPath, "upload_video.json"), "utf-8")
   ) as Record<string, unknown>;
 
+  // The convert stage is responsible for writing a valid channelId (per-channel
+  // row first, global config as last resort). If it's missing here, the
+  // upload metadata was written by a buggy/older convert — fail loudly.
   if (!uploadMeta["channelId"]) {
-    uploadMeta["channelId"] = config.peertube.channel_id;
-  }
-  if (!uploadMeta["channelId"]) {
-    throw new Error("no channelId configured (peertube.channel_id)");
+    throw new Error(
+      `upload_video.json is missing channelId (re-run convert for this video; see issue #94)`,
+    );
   }
 
   // ── 1. Upload video file ─────────────────────────────────────────
