@@ -135,6 +135,7 @@ async function main(): Promise<void> {
     } else {
       logger.info(`yt2ptd listening on http://${bind}:${port}`);
     }
+    logger.info(`  config:   ${paths.configPath}`);
     logger.info(`  data_dir: ${paths.dataDir}`);
     logger.info(`  log_dir:  ${paths.logDir}`);
     logger.info(`  db:       ${paths.dataDir}/yt2pt.db`);
