@@ -60,6 +60,8 @@ export interface ChannelSummary {
   last_synced_at: string | null;
   video_count: number;
   status_summary: Record<string, number>;
+  avatar_url: string | null;
+  banner_url: string | null;
 }
 export interface VideoRow {
   id: number;
@@ -71,6 +73,7 @@ export interface VideoRow {
   progress_pct: number;
   error_message: string | null;
   folder_name: string | null;
+  upload_date: string | null;
   created_at: string;
   updated_at: string;
 }

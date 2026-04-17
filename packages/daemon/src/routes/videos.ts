@@ -30,11 +30,12 @@ export interface VideoWithChannel {
   progress_pct: number;
   error_message: string | null;
   folder_name: string | null;
+  upload_date: string | null;
   created_at: string;
   updated_at: string;
 }
 
-const SORT_COLUMNS = new Set(["updated_at", "created_at", "title"]);
+const SORT_COLUMNS = new Set(["updated_at", "created_at", "title", "upload_date"]);
 const VALID_STATUSES: Set<string> = new Set(VIDEO_STATUS);
 
 export interface ListVideosParams {
@@ -42,7 +43,7 @@ export interface ListVideosParams {
   statuses?: VideoStatus[];
   page: number;
   perPage: number;
-  sort: "updated_at" | "created_at" | "title";
+  sort: "updated_at" | "created_at" | "title" | "upload_date";
   order: "asc" | "desc";
 }
 
@@ -57,7 +58,7 @@ const SELECT_WITH_CHANNEL = `
   SELECT v.id, v.youtube_video_id, v.channel_id,
          c.youtube_channel_name AS channel_name,
          v.title, v.status, v.progress_pct, v.error_message,
-         v.folder_name, v.created_at, v.updated_at
+         v.folder_name, v.upload_date, v.created_at, v.updated_at
   FROM videos v
   LEFT JOIN channels c ON c.id = v.channel_id
 `;
@@ -142,7 +143,7 @@ export async function registerVideoRoutes(app: FastifyInstance): Promise<void> {
     const perPageRaw = q.per_page ? Number(q.per_page) | 0 : 50;
     const perPage = Math.max(1, Math.min(200, perPageRaw));
 
-    const sort = SORT_COLUMNS.has(q.sort ?? "") ? (q.sort as "updated_at" | "created_at" | "title") : "updated_at";
+    const sort = SORT_COLUMNS.has(q.sort ?? "") ? (q.sort as "updated_at" | "created_at" | "title" | "upload_date") : "updated_at";
     const order = q.order === "asc" ? "asc" : "desc";
 
     return listVideosWithChannel(ctx.db, {

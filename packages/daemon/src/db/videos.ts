@@ -10,6 +10,7 @@ export interface Video {
   progress_pct: number;
   error_message: string | null;
   folder_name: string | null;
+  upload_date: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -20,13 +21,14 @@ export interface InsertVideoInput {
   title?: string | null;
   status: VideoStatus;
   folder_name?: string | null;
+  upload_date?: string | null;
 }
 
 export function insertVideo(db: Database, input: InsertVideoInput): Video {
   const now = new Date().toISOString();
   const stmt = db.prepare(
-    `INSERT INTO videos (youtube_video_id, channel_id, title, status, folder_name, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`
+    `INSERT INTO videos (youtube_video_id, channel_id, title, status, folder_name, upload_date, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
   );
   const result = stmt.run(
     input.youtube_video_id,
@@ -34,6 +36,7 @@ export function insertVideo(db: Database, input: InsertVideoInput): Video {
     input.title ?? null,
     input.status,
     input.folder_name ?? null,
+    input.upload_date ?? null,
     now,
     now
   );

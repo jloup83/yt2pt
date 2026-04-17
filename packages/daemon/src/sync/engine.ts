@@ -234,6 +234,7 @@ export class SyncEngine extends EventEmitter<SyncEngineEvents> {
             channel_id: channel.id,
             title: entry.title ?? null,
             status: "DOWNLOAD_QUEUED",
+            upload_date: normalizeUploadDate(entry),
           });
           newVideos++;
           if (newVideos % this.progressEvery === 0) {
@@ -279,6 +280,25 @@ interface FlatPlaylistEntry {
   title?: string;
   availability?: string;
   url?: string;
+  upload_date?: string;
+  timestamp?: number;
+}
+
+/**
+ * Convert an upload timestamp from a yt-dlp flat-playlist entry into
+ * a YYYY-MM-DD string. yt-dlp's `upload_date` is already `YYYYMMDD`;
+ * `timestamp` is a Unix epoch in seconds. Returns null if unavailable.
+ */
+function normalizeUploadDate(entry: FlatPlaylistEntry): string | null {
+  if (typeof entry.upload_date === "string" && /^\d{8}$/.test(entry.upload_date)) {
+    const s = entry.upload_date;
+    return `${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6, 8)}`;
+  }
+  if (typeof entry.timestamp === "number" && Number.isFinite(entry.timestamp)) {
+    const d = new Date(entry.timestamp * 1000);
+    if (!Number.isNaN(d.getTime())) return d.toISOString().slice(0, 10);
+  }
+  return null;
 }
 
 function defaultSpawn(binary: string, args: string[]): ChildProcessWithoutNullStreams {
