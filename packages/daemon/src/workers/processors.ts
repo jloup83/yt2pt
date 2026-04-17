@@ -43,6 +43,8 @@ export function createProcessors(ctx: ProcessorContext): Processors {
   const download: JobProcessor = async (video, signal) => {
     const bin = await ytdlp();
     const url = youtubeUrl(video.youtube_video_id);
+    logger.info(`[download] video ${video.id}: starting (${video.youtube_video_id})`);
+    const started = Date.now();
     const result = await runDownload(bin, url, config, paths, logger, signal, (pct) => {
       queue.reportProgress(video.id, pct);
     });
@@ -50,6 +52,7 @@ export function createProcessors(ctx: ProcessorContext): Processors {
       folder_name: result.folderName,
       title: video.title ?? null,
     });
+    logger.info(`[download] video ${video.id}: complete → ${result.outputDir} (${Date.now() - started}ms)`);
   };
 
   const convert: JobProcessor = async (video, signal) => {
@@ -58,9 +61,12 @@ export function createProcessors(ctx: ProcessorContext): Processors {
     if (!channelSlug) throw new Error(`cannot parse channel slug from folder_name: ${video.folder_name}`);
     const sourcePath = resolve(paths.dataDir, "downloaded_from_youtube", channelSlug, video.folder_name);
     const targetPath = resolve(paths.dataDir, "upload_to_peertube", channelSlug, video.folder_name);
+    logger.info(`[convert] video ${video.id}: starting → ${targetPath}`);
+    const started = Date.now();
     queue.reportProgress(video.id, 10);
     await runConvert(sourcePath, targetPath, config, logger, signal);
     queue.reportProgress(video.id, 100);
+    logger.info(`[convert] video ${video.id}: complete (${Date.now() - started}ms)`);
   };
 
   const upload: JobProcessor = async (video, signal) => {
@@ -68,10 +74,13 @@ export function createProcessors(ctx: ProcessorContext): Processors {
     const channelSlug = channelSlugFromFolderName(video.folder_name);
     if (!channelSlug) throw new Error(`cannot parse channel slug from folder_name: ${video.folder_name}`);
     const videoPath = resolve(paths.dataDir, "upload_to_peertube", channelSlug, video.folder_name);
+    logger.info(`[upload] video ${video.id}: starting → ${videoPath}`);
+    const started = Date.now();
     queue.reportProgress(video.id, 5);
-    await runUpload(videoPath, config, peertube, logger, signal, (pct) => {
+    const uuid = await runUpload(videoPath, config, peertube, logger, signal, (pct) => {
       queue.reportProgress(video.id, pct);
     });
+    logger.info(`[upload] video ${video.id}: complete uuid=${uuid} (${Date.now() - started}ms)`);
   };
 
   return { download, convert, upload };
