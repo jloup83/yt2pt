@@ -1,7 +1,13 @@
 # yt2pt configuration
 
 [yt2pt]
-data_dir = "data"                             # base directory for downloaded and converted videos
+# data_dir and log_dir default to standard Linux paths:
+#   root mode:  /var/lib/yt2pt  and  /var/log/yt2pt
+#   user mode:  ~/.local/share/yt2pt  and  ~/.local/share/yt2pt/logs
+#   dev  mode:  <repo>/data                    (macOS or when run from a clone)
+# Uncomment to override. Config wins over $YT2PT_DATA_DIR / $YT2PT_LOG_DIR env vars.
+# data_dir = "/var/lib/yt2pt"
+# log_dir = "/var/log/yt2pt"
 log_level = "info"                            # error | info | debug
 overwrite_existing = false
 skip_downloaded = true

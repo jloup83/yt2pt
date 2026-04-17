@@ -1,12 +1,17 @@
 import { readFileSync, writeFileSync } from "node:fs";
-import { resolve } from "node:path";
 import { parse as parseToml, stringify as stringifyToml } from "smol-toml";
 import { Logger } from "./logger";
+import { resolvePaths, type ResolvedPaths } from "./paths";
+
+export function getConfigPath(): string {
+  return resolvePaths().configPath;
+}
 
 // ── Interfaces ──────────────────────────────────────────────────────
 
 interface Yt2ptConfig {
   data_dir: string;
+  log_dir: string;
   log_level: string;
   overwrite_existing: boolean;
   skip_downloaded: boolean;
@@ -55,7 +60,8 @@ export interface Config {
 
 const DEFAULTS: Config = {
   yt2pt: {
-    data_dir: "data",
+    data_dir: "",
+    log_dir: "",
     log_level: "info",
     overwrite_existing: false,
     skip_downloaded: true,
@@ -89,15 +95,6 @@ const DEFAULTS: Config = {
   },
 };
 
-// ── Path resolution ─────────────────────────────────────────────────
-
-// From packages/shared/dist/ back up to repo root
-const CONFIG_PATH = resolve(__dirname, "..", "..", "..", "yt2pt.conf.toml");
-
-export function getConfigPath(): string {
-  return CONFIG_PATH;
-}
-
 // ── Loader ──────────────────────────────────────────────────────────
 
 function deepMerge(defaults: Record<string, unknown>, overrides: Record<string, unknown>): Record<string, unknown> {
@@ -116,12 +113,15 @@ function deepMerge(defaults: Record<string, unknown>, overrides: Record<string, 
   return result;
 }
 
-export function loadConfig(): { config: Config; overrides: Set<string> } {
+export function loadConfig(): { config: Config; overrides: Set<string>; paths: ResolvedPaths } {
   const overrides = new Set<string>();
+
+  // Resolve the config file path first (env + auto; config can't override its own location).
+  const initial = resolvePaths();
 
   let userConfig: Record<string, unknown> = {};
   try {
-    const raw = readFileSync(CONFIG_PATH, "utf-8");
+    const raw = readFileSync(initial.configPath, "utf-8");
     userConfig = parseToml(raw) as Record<string, unknown>;
   } catch {
     // No config file or invalid TOML — use defaults
@@ -138,13 +138,25 @@ export function loadConfig(): { config: Config; overrides: Set<string> } {
   }
 
   const merged = deepMerge(DEFAULTS as unknown as Record<string, unknown>, userConfig) as unknown as Config;
-  return { config: merged, overrides };
+
+  // Re-resolve with config overrides (data_dir / log_dir from TOML win over env).
+  const paths = resolvePaths({
+    data_dir: merged.yt2pt.data_dir || undefined,
+    log_dir: merged.yt2pt.log_dir || undefined,
+  });
+
+  // Fill in the effective resolved paths so callers (logger, workers, etc.) can read config.yt2pt.{data_dir,log_dir}.
+  merged.yt2pt.data_dir = paths.dataDir;
+  merged.yt2pt.log_dir = paths.logDir;
+
+  return { config: merged, overrides, paths };
 }
 
 // ── Writer ──────────────────────────────────────────────────────────
 
-export function saveConfig(config: Config): void {
-  writeFileSync(CONFIG_PATH, stringifyToml(config as unknown as Record<string, unknown>) + "\n", "utf-8");
+export function saveConfig(config: Config, configPath?: string): void {
+  const target = configPath ?? resolvePaths().configPath;
+  writeFileSync(target, stringifyToml(config as unknown as Record<string, unknown>) + "\n", "utf-8");
 }
 
 // ── Printer ─────────────────────────────────────────────────────────

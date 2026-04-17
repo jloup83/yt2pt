@@ -3,7 +3,7 @@
 import { readFileSync } from "node:fs";
 import { access, readdir } from "node:fs/promises";
 import { join, resolve } from "node:path";
-import { loadConfig, printConfig, createLogger } from "@yt2pt/shared";
+import { loadConfig, printConfig, createLogger, ensureDirs } from "@yt2pt/shared";
 import { downloadFromYouTube, convertMetadata, uploadToPeertube } from "@yt2pt/daemon";
 
 const { version: VERSION } = JSON.parse(
@@ -35,9 +35,7 @@ function isYouTubeUrl(url: string): boolean {
   }
 }
 
-async function findYtDlpBinary(): Promise<string> {
-  // From packages/cli/dist/ back up to repo root bin/
-  const binDir = resolve(__dirname, "..", "..", "..", "bin");
+async function findYtDlpBinary(binDir: string): Promise<string> {
   try {
     await access(binDir);
   } catch {
@@ -88,9 +86,12 @@ async function main(): Promise<void> {
   const hasUploadOnly = flags.includes("--upload-only");
 
   // Load and display configuration
-  const { config, overrides } = loadConfig();
+  const { config, overrides, paths } = loadConfig();
+  ensureDirs(paths);
   const log = createLogger(config);
   printConfig(config, overrides, log);
+  log.debug(`Path mode: ${paths.mode}`);
+  log.debug(`Config path: ${paths.configPath}`);
 
   // ── Convert metadata ──────────────────────────────────────────────
   if (hasConvertMetadata) {
@@ -117,7 +118,7 @@ async function main(): Promise<void> {
 
   let ytdlp: string;
   try {
-    ytdlp = await findYtDlpBinary();
+    ytdlp = await findYtDlpBinary(paths.binDir);
     log.debug(`yt-dlp binary: ${ytdlp}`);
   } catch (err) {
     log.error(`${(err as Error).message}`);
