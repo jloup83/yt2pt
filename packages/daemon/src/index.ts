@@ -10,3 +10,6 @@ export * as channels from "./db/channels";
 export * as videos from "./db/videos";
 export type { Channel, InsertChannelInput } from "./db/channels";
 export type { Video, InsertVideoInput, UpdateVideoInput } from "./db/videos";
+
+export { buildServer } from "./server";
+export type { ServerContext, BuildServerOptions } from "./server";
