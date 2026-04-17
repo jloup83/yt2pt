@@ -35,3 +35,6 @@ export type { ProcessorContext, Processors, DownloadResult } from "./workers";
 
 export { registerSettingsRoutes, redactConfig, validatePatch, mergeConfig } from "./routes/settings";
 export type { ValidationError } from "./routes/settings";
+
+export { registerPeertubeRoutes, fetchUserChannels } from "./routes/peertube";
+export type { PeertubeChannel } from "./routes/peertube";
