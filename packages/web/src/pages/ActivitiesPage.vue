@@ -5,6 +5,7 @@ import {
   type ChannelSummary,
   type VideoRow,
 } from "../api";
+import { useEvents, type VideoStatusEvent } from "../composables/useEvents";
 
 // Keep in sync with packages/daemon/src/db/schema.ts
 const STATUSES = [
@@ -131,8 +132,8 @@ function rowClass(video: VideoRow): string {
   return classes.join(" ");
 }
 
-// ── Real-time row updates (simple EventSource; full composable lands in #67) ──
-let es: EventSource | null = null;
+// ── Real-time row updates via the shared SSE composable ──────────
+const events = useEvents();
 
 function flash(id: number): void {
   const prev = flashes.value[id];
@@ -144,7 +145,7 @@ function flash(id: number): void {
   }, 900) as unknown as number };
 }
 
-function applyVideoUpdate(payload: Partial<VideoRow> & { id: number }): void {
+function applyVideoUpdate(payload: VideoStatusEvent): void {
   const idx = videos.value.findIndex((v) => v.id === payload.id);
   if (idx < 0) return;
   const next = { ...videos.value[idx], ...payload };
@@ -156,29 +157,15 @@ function applyVideoUpdate(payload: Partial<VideoRow> & { id: number }): void {
   flash(payload.id);
 }
 
-function connectEvents(): void {
-  try {
-    es = new EventSource("/api/events");
-    es.addEventListener("video_status", (ev) => {
-      try {
-        const data = JSON.parse((ev as MessageEvent).data) as Partial<VideoRow> & { id?: number };
-        if (typeof data.id === "number") applyVideoUpdate(data as Partial<VideoRow> & { id: number });
-      } catch { /* ignore malformed frame */ }
-    });
-    es.addEventListener("sync_complete", () => { void load(); });
-  } catch {
-    es = null;
-  }
-}
+events.onVideoUpdate(applyVideoUpdate);
+events.onSyncComplete(() => { void load(); });
 
 onMounted(async () => {
   await Promise.all([loadChannels(), load()]);
   clockTimer = setInterval(() => { now.value = Date.now(); }, 15_000);
-  connectEvents();
 });
 onUnmounted(() => {
   if (clockTimer) clearInterval(clockTimer);
-  if (es) es.close();
   for (const t of Object.values(flashes.value)) if (t) clearTimeout(t as unknown as number);
 });
 

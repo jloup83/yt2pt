@@ -1,12 +1,28 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref } from "vue";
+import { onMounted, ref, watch } from "vue";
 import { endpoints, type PeertubeStatus } from "../api";
+import { useEvents } from "../composables/useEvents";
 
 const status = ref<PeertubeStatus | null>(null);
 const error = ref<string | null>(null);
-let timer: ReturnType<typeof setInterval> | null = null;
 
-async function poll(): Promise<void> {
+const events = useEvents();
+watch(
+  events.peertubeStatus,
+  (next) => {
+    if (next) {
+      status.value = next;
+      error.value = null;
+    }
+  },
+  { immediate: true },
+);
+
+onMounted(async () => {
+  // One-shot HTTP fetch to populate the dot before the first SSE frame
+  // arrives (e.g. the PeerTube poll takes up to 5 s to fire its first
+  // status event).
+  if (status.value) return;
   try {
     status.value = await endpoints.peertubeStatus();
     error.value = null;
@@ -14,14 +30,6 @@ async function poll(): Promise<void> {
     error.value = err instanceof Error ? err.message : String(err);
     status.value = null;
   }
-}
-
-onMounted(() => {
-  void poll();
-  timer = setInterval(() => void poll(), 5000);
-});
-onUnmounted(() => {
-  if (timer) clearInterval(timer);
 });
 </script>
 

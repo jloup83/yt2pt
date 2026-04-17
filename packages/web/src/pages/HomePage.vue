@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 import {
   endpoints,
   type ApiError,
@@ -7,13 +7,23 @@ import {
   type PeertubeChannel,
   type PeertubeStatus,
 } from "../api";
+import { useEvents } from "../composables/useEvents";
 
-// ── PeerTube status polling (every 5 s) ───────────────────────────
+// ── PeerTube status (SSE-driven, with an initial HTTP fetch) ──────
 const ptStatus = ref<PeertubeStatus | null>(null);
 const ptStatusError = ref<string | null>(null);
-let statusTimer: ReturnType<typeof setInterval> | null = null;
 
-async function pollStatus(): Promise<void> {
+const events = useEvents();
+// Mirror the shared reactive status from the SSE stream.
+watch(events.peertubeStatus, (next) => {
+  if (next) {
+    ptStatus.value = next;
+    ptStatusError.value = null;
+  }
+}, { immediate: true });
+
+async function primeStatus(): Promise<void> {
+  if (ptStatus.value) return;
   try {
     ptStatus.value = await endpoints.peertubeStatus();
     ptStatusError.value = null;
@@ -143,11 +153,16 @@ const canAdd = computed(
   () => !addBusy.value && ytUrl.value.trim().length > 0 && selectedPtChannel.value.length > 0,
 );
 
-onMounted(async () => {
-  await Promise.all([pollStatus(), loadChannels(), loadPtChannels()]);
-  statusTimer = setInterval(() => void pollStatus(), 5000);
+// Refresh the channels list whenever a sync finishes on any channel.
+events.onSyncComplete(() => { void loadChannels(); });
+// Surface terminal sync failures to the matching row.
+events.onSyncFailed((ev) => {
+  rowStatus.value = { ...rowStatus.value, [ev.channel_id]: `sync failed: ${ev.error}` };
 });
-onUnmounted(() => { if (statusTimer) clearInterval(statusTimer); });
+
+onMounted(async () => {
+  await Promise.all([primeStatus(), loadChannels(), loadPtChannels()]);
+});
 </script>
 
 <template>
