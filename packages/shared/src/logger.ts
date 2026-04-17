@@ -1,6 +1,6 @@
 import { appendFileSync, mkdirSync } from "node:fs";
 import { dirname, resolve } from "node:path";
-import { Config } from "./config";
+import type { Config } from "./config";
 
 // ── Log levels ──────────────────────────────────────────────────────
 

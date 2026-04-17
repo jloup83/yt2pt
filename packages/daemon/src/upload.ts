@@ -1,8 +1,7 @@
 import { openAsBlob } from "node:fs";
 import { readFile, readdir, rm } from "node:fs/promises";
 import { extname, join, resolve } from "node:path";
-import { Config } from "./config";
-import { Logger } from "./logger";
+import { Config, Logger } from "@yt2pt/shared";
 
 // ── Helpers ─────────────────────────────────────────────────────────
 

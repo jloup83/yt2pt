@@ -1,0 +1,17 @@
+{
+  "name": "yt2pt",
+  "version": "0.2.0",
+  "private": true,
+  "description": "Download YouTube videos with metadata and thumbnails for PeerTube migration",
+  "main": "dist/index.js",
+  "bin": {
+    "yt2pt": "dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc -b"
+  },
+  "dependencies": {
+    "@yt2pt/shared": "0.2.0",
+    "@yt2pt/daemon": "0.2.0"
+  }
+}

@@ -1,8 +1,7 @@
 import { readFileSync } from "node:fs";
 import { mkdir, writeFile, copyFile, readdir, rm } from "node:fs/promises";
 import { join, resolve } from "node:path";
-import { Config } from "./config";
-import { Logger } from "./logger";
+import { Config, Logger } from "@yt2pt/shared";
 
 // ── YouTube → PeerTube category mapping ─────────────────────────────
 
