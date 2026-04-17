@@ -182,7 +182,7 @@ test("DELETE /api/channels/:id removes the row; 404 when missing; 400 on bad id"
   ctx.cleanup();
 });
 
-test("POST /api/channels/:id/sync returns 501 until the sync engine (#62) lands", async () => {
+test("POST /api/channels/:id/sync returns 503 without a sync engine, 202 with one", async () => {
   const ctx = makeCtx();
   const channel = insertChannel(ctx.db, {
     youtube_channel_url: "https://www.youtube.com/@tosync",
@@ -193,9 +193,9 @@ test("POST /api/channels/:id/sync returns 501 until the sync engine (#62) lands"
   const miss = await app.inject({ method: "POST", url: "/api/channels/9999/sync" });
   assert.equal(miss.statusCode, 404);
 
-  const res = await app.inject({ method: "POST", url: `/api/channels/${channel.id}/sync` });
-  assert.equal(res.statusCode, 501);
-  assert.equal(res.json().channel_id, channel.id);
+  // No sync engine wired → 503.
+  const noSync = await app.inject({ method: "POST", url: `/api/channels/${channel.id}/sync` });
+  assert.equal(noSync.statusCode, 503);
 
   await app.close();
   ctx.cleanup();

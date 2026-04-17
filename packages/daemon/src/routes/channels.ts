@@ -172,9 +172,21 @@ export async function registerChannelRoutes(app: FastifyInstance): Promise<void>
       reply.code(404);
       return { error: "not found" };
     }
-    // Sync engine lands in #62. Shape the response now so the UI and
-    // tests can depend on it.
-    reply.code(501);
-    return { error: "sync engine not yet implemented", channel_id: id };
+    if (!ctx.sync) {
+      reply.code(503);
+      return { error: "sync engine not available" };
+    }
+    const result = ctx.sync.trigger(id);
+    if (result.status === "in_progress") {
+      reply.code(409);
+      return { error: "sync already in progress", channel_id: id };
+    }
+    if (result.status === "rate_limited") {
+      reply.code(429);
+      reply.header("Retry-After", String(result.retry_after_s));
+      return { error: "rate limited", channel_id: id, retry_after_s: result.retry_after_s };
+    }
+    reply.code(202);
+    return { status: "started", channel_id: id };
   });
 }

@@ -6,6 +6,7 @@ import type { Database } from "better-sqlite3";
 import type { Config, Logger, ResolvedPaths } from "@yt2pt/shared";
 import type { PeertubeConnection } from "./peertube/connection";
 import type { JobQueue } from "./queue";
+import type { SyncEngine } from "./sync";
 import { registerSettingsRoutes } from "./routes/settings";
 import { registerPeertubeRoutes } from "./routes/peertube";
 import { registerChannelRoutes } from "./routes/channels";
@@ -19,6 +20,7 @@ export interface ServerContext {
   logger: Logger;
   peertube?: PeertubeConnection;
   queue?: JobQueue;
+  sync?: SyncEngine;
 }
 
 export interface BuildServerOptions {

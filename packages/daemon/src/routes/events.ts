@@ -61,6 +61,17 @@ export async function registerEventsRoutes(app: FastifyInstance): Promise<void> 
     queueEvents?.on("status-change", onStatus);
     queueEvents?.on("progress", onProgress);
 
+    // ── Sync engine events ─────────────────────────────────────────
+    const onSyncStarted = (p: unknown): void => send("sync_started", p);
+    const onSyncProgress = (p: unknown): void => send("sync_progress", p);
+    const onSyncCompleted = (p: unknown): void => send("sync_complete", p);
+    const onSyncFailed = (p: unknown): void => send("sync_failed", p);
+    const sync = ctx.sync;
+    sync?.on("sync-started", onSyncStarted);
+    sync?.on("sync-progress", onSyncProgress);
+    sync?.on("sync-completed", onSyncCompleted);
+    sync?.on("sync-failed", onSyncFailed);
+
     // ── PeerTube status poll → peertube_status on change ───────────
     let lastStatus: ConnectionStatus | null = ctx.peertube?.getStatus() ?? null;
     if (lastStatus) send("peertube_status", lastStatus);
@@ -95,6 +106,10 @@ export async function registerEventsRoutes(app: FastifyInstance): Promise<void> 
     const cleanup = (): void => {
       queueEvents?.off("status-change", onStatus);
       queueEvents?.off("progress", onProgress);
+      sync?.off("sync-started", onSyncStarted);
+      sync?.off("sync-progress", onSyncProgress);
+      sync?.off("sync-completed", onSyncCompleted);
+      sync?.off("sync-failed", onSyncFailed);
       if (poll) clearInterval(poll);
       clearInterval(heartbeat);
     };

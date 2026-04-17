@@ -47,3 +47,13 @@ export type { VideoWithChannel, ListVideosParams, ListVideosResult } from "./rou
 
 export { registerEventsRoutes, formatSseFrame, videoToStatusEvent } from "./routes/events";
 export type { VideoStatusEvent } from "./routes/events";
+
+export { SyncEngine } from "./sync";
+export type {
+  SyncEngineOptions,
+  SyncEngineEvents,
+  SyncResult,
+  SyncProgress,
+  TriggerResult,
+  YtdlpSpawner,
+} from "./sync";
