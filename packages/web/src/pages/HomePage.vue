@@ -193,6 +193,89 @@ const canAddVideo = computed(
     && selectedVideoPtChannel.value.length > 0,
 );
 
+// ── Create PeerTube channel from YouTube ──────────────────────────
+type PtPayloadPreview = {
+  name: string;
+  displayName: string;
+  description: string;
+  support: string;
+};
+const createYtUrl = ref("");
+const createPreview = ref<{
+  payload: PtPayloadPreview;
+  has_avatar: boolean;
+  has_banner: boolean;
+  already_mapped: boolean;
+  existing_peertube_channel_id: string | null;
+} | null>(null);
+const createOverrides = ref<PtPayloadPreview>({
+  name: "", displayName: "", description: "", support: "",
+});
+const createBusy = ref(false);
+const createStatus = ref<{ kind: "ok" | "err"; msg: string } | null>(null);
+
+async function onPreviewCreate(): Promise<void> {
+  createStatus.value = null;
+  createPreview.value = null;
+  if (!createYtUrl.value.trim()) {
+    createStatus.value = { kind: "err", msg: "YouTube channel URL is required." };
+    return;
+  }
+  createBusy.value = true;
+  try {
+    const res = await endpoints.previewPeertubeChannelFromYoutube(createYtUrl.value.trim());
+    createPreview.value = res;
+    createOverrides.value = { ...res.payload };
+    if (res.already_mapped) {
+      createStatus.value = {
+        kind: "err",
+        msg: `This YouTube channel is already mapped to PeerTube channel #${res.existing_peertube_channel_id}.`,
+      };
+    }
+  } catch (err) {
+    createStatus.value = { kind: "err", msg: (err as Error).message };
+  } finally {
+    createBusy.value = false;
+  }
+}
+
+async function onConfirmCreate(): Promise<void> {
+  if (!createPreview.value) return;
+  createStatus.value = null;
+  createBusy.value = true;
+  try {
+    const res = await endpoints.createPeertubeChannelFromYoutube(
+      createYtUrl.value.trim(),
+      createOverrides.value,
+    );
+    const warn = res.warnings.length > 0 ? ` (warnings: ${res.warnings.join("; ")})` : "";
+    createStatus.value = {
+      kind: "ok",
+      msg: `Created PeerTube channel ${res.peertube_channel.name} (#${res.peertube_channel.id})${warn}`,
+    };
+    createPreview.value = null;
+    createYtUrl.value = "";
+    await Promise.all([loadChannels(), loadPtChannels()]);
+  } catch (err) {
+    const e = err as ApiError;
+    if (e.status === 409 && (e.body as { peertube_status?: number })?.peertube_status === 409) {
+      createStatus.value = {
+        kind: "err",
+        msg: `Slug "${createOverrides.value.name}" is taken on PeerTube — pick a different one and try again.`,
+      };
+    } else {
+      createStatus.value = { kind: "err", msg: (err as Error).message };
+    }
+  } finally {
+    createBusy.value = false;
+  }
+}
+
+function onCancelCreate(): void {
+  createPreview.value = null;
+  createStatus.value = null;
+}
+
 // Refresh the channels list whenever a sync finishes on any channel.
 events.onSyncComplete(() => { void loadChannels(); });
 // Surface terminal sync failures to the matching row.
@@ -356,6 +439,69 @@ onMounted(async () => {
       <div class="row">
         <button type="submit" :aria-busy="addVideoBusy" :disabled="!canAddVideo">Sync video</button>
         <span v-if="addVideoStatus" :class="addVideoStatus.kind === 'ok' ? 'ok' : 'error'">{{ addVideoStatus.msg }}</span>
+      </div>
+    </form>
+  </article>
+
+  <!-- ── Create PeerTube channel from YouTube ─────────────────── -->
+  <article>
+    <header><strong>Create PeerTube channel from YouTube</strong></header>
+    <p><small>Mirror a YouTube channel's name, description, avatar, and banner into a brand-new
+      PeerTube channel. The created channel is empty — videos are not synced automatically.</small></p>
+
+    <!-- Step 1 — URL entry + preview -->
+    <form v-if="!createPreview" @submit.prevent="onPreviewCreate">
+      <label>
+        YouTube channel URL
+        <input
+          type="url"
+          v-model="createYtUrl"
+          placeholder="https://www.youtube.com/@SomeChannel"
+          :disabled="createBusy"
+        />
+      </label>
+      <div class="row">
+        <button type="submit" :aria-busy="createBusy" :disabled="createBusy || !createYtUrl.trim()">
+          Preview
+        </button>
+        <span v-if="createStatus" :class="createStatus.kind === 'ok' ? 'ok' : 'error'">{{ createStatus.msg }}</span>
+      </div>
+    </form>
+
+    <!-- Step 2 — review proposed payload, optionally edit slug -->
+    <form v-else @submit.prevent="onConfirmCreate">
+      <label>
+        Slug (PeerTube handle)
+        <input type="text" v-model="createOverrides.name" :disabled="createBusy" />
+        <small>Lowercase letters, digits, underscore, dot — max 50 chars.</small>
+      </label>
+      <label>
+        Display name
+        <input type="text" v-model="createOverrides.displayName" :disabled="createBusy" maxlength="50" />
+      </label>
+      <label>
+        Description
+        <textarea v-model="createOverrides.description" :disabled="createBusy" rows="4" maxlength="1000" />
+      </label>
+      <label>
+        Support text
+        <input type="text" v-model="createOverrides.support" :disabled="createBusy" maxlength="1000" />
+      </label>
+      <p>
+        <small>
+          Avatar: <strong>{{ createPreview.has_avatar ? "found" : "none" }}</strong> ·
+          Banner: <strong>{{ createPreview.has_banner ? "found" : "none" }}</strong>
+        </small>
+      </p>
+      <div class="row">
+        <button type="submit" :aria-busy="createBusy"
+          :disabled="createBusy || !createOverrides.name.trim() || createPreview.already_mapped">
+          Create PeerTube channel
+        </button>
+        <button type="button" class="secondary outline" :disabled="createBusy" @click="onCancelCreate">
+          Cancel
+        </button>
+        <span v-if="createStatus" :class="createStatus.kind === 'ok' ? 'ok' : 'error'">{{ createStatus.msg }}</span>
       </div>
     </form>
   </article>

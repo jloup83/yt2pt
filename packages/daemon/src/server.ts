@@ -8,6 +8,8 @@ import type { PeertubeConnection } from "./peertube/connection";
 import type { JobQueue } from "./queue";
 import type { SyncEngine } from "./sync";
 import type { VideoResolver } from "./routes/youtube-video";
+import type { fetchChannelInfo } from "./sync/channel-info";
+import type { createChannelFromYoutube } from "./peertube/create-channel";
 import { registerSettingsRoutes } from "./routes/settings";
 import { registerPeertubeRoutes } from "./routes/peertube";
 import { registerChannelRoutes } from "./routes/channels";
@@ -24,6 +26,10 @@ export interface ServerContext {
   sync?: SyncEngine;
   /** Test-only override for single-video YouTube metadata resolution. */
   videoResolver?: VideoResolver;
+  /** Test-only override for the YouTube channel-info fetcher (#106). */
+  channelInfoFetcher?: typeof fetchChannelInfo;
+  /** Test-only override for the PeerTube channel-creation orchestrator (#108). */
+  ptChannelCreator?: typeof createChannelFromYoutube;
 }
 
 export interface BuildServerOptions {

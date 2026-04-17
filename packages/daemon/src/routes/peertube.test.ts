@@ -246,3 +246,179 @@ test("GET /api/peertube/channels returns 502 when the upstream call fails", asyn
   await app.close();
   ctx.cleanup();
 });
+
+// ── POST /api/peertube/channels/create-from-youtube ─────────────────
+
+import { writeFileSync as _writeFileSync, mkdirSync as _mkdirSync } from "node:fs";
+import { join as _join } from "node:path";
+
+test("POST /api/peertube/channels/create-from-youtube validates URL + auth", async () => {
+  const config = makeConfig();
+  const logger = { error: () => {}, info: () => {}, debug: () => {} } as unknown as Logger;
+  const conn = makeFakePeertube(config, logger, async () => new Response("", { status: 200 }));
+  const ctx = makeCtx(conn);
+  const app = buildServer({ ...ctx, config });
+
+  // Missing url
+  let res = await app.inject({
+    method: "POST", url: "/api/peertube/channels/create-from-youtube", payload: {},
+  });
+  assert.equal(res.statusCode, 400);
+
+  // Bad url
+  res = await app.inject({
+    method: "POST", url: "/api/peertube/channels/create-from-youtube",
+    payload: { youtube_url: "https://example.com/foo" },
+  });
+  assert.equal(res.statusCode, 400);
+
+  await app.close();
+  ctx.cleanup();
+});
+
+test("POST /api/peertube/channels/create-from-youtube returns 401 when not authenticated", async () => {
+  const config = makeConfig();
+  const logger = { error: () => {}, info: () => {}, debug: () => {} } as unknown as Logger;
+  const conn = makeFakePeertube(config, logger, async () => new Response("", { status: 200 }), {
+    authenticated: false,
+  });
+  const ctx = makeCtx(conn);
+  const app = buildServer({ ...ctx, config });
+  const res = await app.inject({
+    method: "POST", url: "/api/peertube/channels/create-from-youtube",
+    payload: { youtube_url: "https://www.youtube.com/@foo" },
+  });
+  assert.equal(res.statusCode, 401);
+  await app.close();
+  ctx.cleanup();
+});
+
+test("POST /api/peertube/channels/create-from-youtube wires fetcher → creator → mapping", async () => {
+  const config = makeConfig();
+  const logger = { error: () => {}, info: () => {}, debug: () => {} } as unknown as Logger;
+  const conn = makeFakePeertube(config, logger, async () => new Response("", { status: 200 }));
+  const ctx = makeCtx(conn);
+
+  // Stub channel-info fetcher: write a metadata.json into the temp dir
+  // and return its path so the orchestrator can read it back.
+  const infoDir = _join(ctx.paths.dataDir, "downloaded_from_youtube", "foo", "channel_info");
+  _mkdirSync(infoDir, { recursive: true });
+  const metaPath = _join(infoDir, "metadata.json");
+  _writeFileSync(metaPath, JSON.stringify({
+    channel: "Foo Channel",
+    channel_url: "https://www.youtube.com/@foo",
+  }), "utf-8");
+
+  const fakeFetcher = async () => ({
+    slug: "foo",
+    dir: infoDir,
+    metadataPath: metaPath,
+    avatarPath: null,
+    bannerPath: null,
+  });
+  const fakeCreator = async (args: { overrides?: { name?: string } }) => ({
+    payload: {
+      name: args.overrides?.name ?? "foo_channel",
+      displayName: "Foo Channel",
+      description: "",
+      support: "",
+    },
+    staged: { dir: "/tmp", metadataPath: "/tmp/m.json", avatarPath: null, bannerPath: null },
+    created: { id: 42, name: args.overrides?.name ?? "foo_channel", displayName: "Foo Channel" },
+    warnings: [],
+  });
+
+  const app = buildServer({
+    ...ctx, config,
+    channelInfoFetcher: fakeFetcher as unknown as ServerCtxFetcher,
+    ptChannelCreator: fakeCreator as unknown as ServerCtxCreator,
+  });
+
+  const res = await app.inject({
+    method: "POST", url: "/api/peertube/channels/create-from-youtube",
+    payload: { youtube_url: "https://www.youtube.com/@foo" },
+  });
+  assert.equal(res.statusCode, 201);
+  const body = res.json();
+  assert.equal(body.peertube_channel.id, 42);
+  assert.equal(body.mapping.peertube_channel_id, "42");
+  assert.equal(body.mapping.youtube_channel_url, "https://www.youtube.com/@foo");
+
+  // Mapping persisted in the DB.
+  const row = ctx.db.prepare("SELECT * FROM channels").all();
+  assert.equal(row.length, 1);
+
+  await app.close();
+  ctx.cleanup();
+});
+
+test("POST /api/peertube/channels/create-from-youtube returns 409 on PT slug conflict", async () => {
+  const config = makeConfig();
+  const logger = { error: () => {}, info: () => {}, debug: () => {} } as unknown as Logger;
+  const conn = makeFakePeertube(config, logger, async () => new Response("", { status: 200 }));
+  const ctx = makeCtx(conn);
+
+  const infoDir = _join(ctx.paths.dataDir, "downloaded_from_youtube", "foo", "channel_info");
+  _mkdirSync(infoDir, { recursive: true });
+  const metaPath = _join(infoDir, "metadata.json");
+  _writeFileSync(metaPath, JSON.stringify({ channel: "Foo" }), "utf-8");
+
+  const fakeFetcher = async () => ({
+    slug: "foo", dir: infoDir, metadataPath: metaPath,
+    avatarPath: null, bannerPath: null,
+  });
+  const { PeertubeApiError } = await import("../peertube/create-channel");
+  const fakeCreator = async () => {
+    throw new PeertubeApiError("slug taken", 409, { code: "channel_name_already_exists" });
+  };
+
+  const app = buildServer({
+    ...ctx, config,
+    channelInfoFetcher: fakeFetcher as unknown as ServerCtxFetcher,
+    ptChannelCreator: fakeCreator as unknown as ServerCtxCreator,
+  });
+  const res = await app.inject({
+    method: "POST", url: "/api/peertube/channels/create-from-youtube",
+    payload: { youtube_url: "https://www.youtube.com/@foo", overrides: { name: "foo" } },
+  });
+  assert.equal(res.statusCode, 409);
+  const body = res.json();
+  assert.equal(body.peertube_status, 409);
+  assert.equal(body.attempted_slug, "foo");
+
+  // No mapping was persisted on failure.
+  const rows = ctx.db.prepare("SELECT * FROM channels").all();
+  assert.equal(rows.length, 0);
+
+  await app.close();
+  ctx.cleanup();
+});
+
+test("POST /api/peertube/channels/create-from-youtube refuses duplicate yt2pt mapping", async () => {
+  const config = makeConfig();
+  const logger = { error: () => {}, info: () => {}, debug: () => {} } as unknown as Logger;
+  const conn = makeFakePeertube(config, logger, async () => new Response("", { status: 200 }));
+  const ctx = makeCtx(conn);
+
+  // Pre-existing mapping for the same URL.
+  const { insertChannel } = await import("../db/channels");
+  insertChannel(ctx.db, {
+    youtube_channel_url: "https://www.youtube.com/@foo",
+    peertube_channel_id: "7",
+  });
+
+  const app = buildServer({ ...ctx, config });
+  const res = await app.inject({
+    method: "POST", url: "/api/peertube/channels/create-from-youtube",
+    payload: { youtube_url: "https://www.youtube.com/@foo" },
+  });
+  assert.equal(res.statusCode, 409);
+  assert.equal(res.json().peertube_channel_id, "7");
+  await app.close();
+  ctx.cleanup();
+});
+
+// Type aliases for the test casts above (avoid pulling the route's
+// internal types into this file).
+type ServerCtxFetcher = NonNullable<Parameters<typeof buildServer>[0]["channelInfoFetcher"]>;
+type ServerCtxCreator = NonNullable<Parameters<typeof buildServer>[0]["ptChannelCreator"]>;
