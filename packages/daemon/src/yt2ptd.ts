@@ -6,7 +6,8 @@ import { openDatabase } from "./db";
 import { buildServer } from "./server";
 import { JobQueue } from "./queue";
 import { PeertubeConnection } from "./peertube/connection";
-import { createProcessors } from "./workers";
+import { createProcessors, findYtDlpBinary } from "./workers";
+import { SyncEngine } from "./sync";
 
 async function main(): Promise<void> {
   const { config, paths } = loadConfig();
@@ -51,16 +52,24 @@ async function main(): Promise<void> {
   queueRef = queue;
   queue.start();
 
+  const sync = new SyncEngine({
+    db,
+    logger,
+    queue,
+    ytdlpBinary: () => findYtDlpBinary(paths.binDir),
+  });
+
   const webRoot = process.env.YT2PT_WEB_ROOT
     ? resolve(process.env.YT2PT_WEB_ROOT)
     : resolve(__dirname, "..", "..", "web", "dist");
 
-  const app = buildServer({ config, paths, db, logger, peertube, queue }, { webRoot });
+  const app = buildServer({ config, paths, db, logger, peertube, queue, sync }, { webRoot });
 
   const shutdown = async (signal: string): Promise<void> => {
     logger.info(`Received ${signal}, shutting down...`);
     try {
       peertube.stop();
+      sync.stopAll();
       await queue.stop();
       await app.close();
       db.close();
