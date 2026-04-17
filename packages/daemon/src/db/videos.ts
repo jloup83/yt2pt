@@ -11,6 +11,7 @@ export interface Video {
   error_message: string | null;
   folder_name: string | null;
   upload_date: string | null;
+  peertube_video_uuid: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -69,6 +70,7 @@ export interface UpdateVideoInput {
   error_message?: string | null;
   title?: string | null;
   folder_name?: string | null;
+  peertube_video_uuid?: string | null;
 }
 
 export function updateVideo(db: Database, id: number, input: UpdateVideoInput): void {

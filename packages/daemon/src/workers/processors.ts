@@ -94,6 +94,7 @@ export function createProcessors(ctx: ProcessorContext): Processors {
     const uuid = await runUpload(videoPath, config, peertube, logger, signal, (pct) => {
       queue.reportProgress(video.id, pct);
     });
+    updateVideo(db, video.id, { peertube_video_uuid: uuid });
     logger.info(`[upload] video ${video.id}: complete uuid=${uuid} (${Date.now() - started}ms)`);
   };
 

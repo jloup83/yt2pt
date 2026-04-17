@@ -513,3 +513,117 @@ test("GET /api/videos accepts sort=upload_date", async () => {
   await app.close();
   tc.cleanup();
 });
+
+// ── DELETE /api/videos/:id (#110) ──────────────────────────────────
+
+test("DELETE /api/videos/:id removes the row; 404 when missing; 400 on bad id", async () => {
+  const tc = makeCtx();
+  const { channelA } = seed(tc.ctx);
+  const v = insertVideo(tc.ctx.db, {
+    youtube_video_id: "del1",
+    channel_id: channelA,
+    title: "to-delete",
+    status: "UPLOADED",
+  });
+  const app = buildServer(tc.ctx);
+
+  const bad = await app.inject({ method: "DELETE", url: "/api/videos/abc" });
+  assert.equal(bad.statusCode, 400);
+
+  const miss = await app.inject({ method: "DELETE", url: "/api/videos/99999" });
+  assert.equal(miss.statusCode, 404);
+
+  const ok = await app.inject({ method: "DELETE", url: `/api/videos/${v.id}` });
+  assert.equal(ok.statusCode, 200);
+  const body = ok.json() as { status: string; cancelled: boolean; peertube_deleted: boolean | null };
+  assert.equal(body.status, "deleted");
+  assert.equal(body.cancelled, false);
+  assert.equal(body.peertube_deleted, null);
+
+  const after = await app.inject({ method: "GET", url: `/api/videos/${v.id}` });
+  assert.equal(after.statusCode, 404);
+
+  await app.close();
+  tc.cleanup();
+});
+
+test("DELETE /api/videos/:id?from_peertube=true returns 502 on PT 500", async () => {
+  const tc = makeCtx();
+  const { channelA } = seed(tc.ctx);
+  const v = insertVideo(tc.ctx.db, {
+    youtube_video_id: "del2",
+    channel_id: channelA,
+    title: "uploaded",
+    status: "UPLOADED",
+  });
+  updateVideo(tc.ctx.db, v.id, { peertube_video_uuid: "uuid-abc" });
+
+  // Stub PeertubeConnection with an authFetch that returns 500.
+  tc.ctx.peertube = {
+    authFetch: async () => new Response("boom", { status: 500 }),
+    getStatus: () => ({ online: true, authenticated: true, instance_url: "x", username: "u" }),
+  } as unknown as import("../peertube/connection").PeertubeConnection;
+
+  const app = buildServer(tc.ctx);
+  const res = await app.inject({
+    method: "DELETE",
+    url: `/api/videos/${v.id}?from_peertube=true`,
+  });
+  assert.equal(res.statusCode, 502);
+
+  // Row must remain since PT delete failed.
+  const after = await app.inject({ method: "GET", url: `/api/videos/${v.id}` });
+  assert.equal(after.statusCode, 200);
+
+  await app.close();
+  tc.cleanup();
+});
+
+test("DELETE /api/videos/:id?from_peertube=true swallows PT 404", async () => {
+  const tc = makeCtx();
+  const { channelA } = seed(tc.ctx);
+  const v = insertVideo(tc.ctx.db, {
+    youtube_video_id: "del3",
+    channel_id: channelA,
+    title: "gone-on-pt",
+    status: "UPLOADED",
+  });
+  updateVideo(tc.ctx.db, v.id, { peertube_video_uuid: "uuid-gone" });
+
+  tc.ctx.peertube = {
+    authFetch: async () => new Response("not found", { status: 404 }),
+    getStatus: () => ({ online: true, authenticated: true, instance_url: "x", username: "u" }),
+  } as unknown as import("../peertube/connection").PeertubeConnection;
+
+  const app = buildServer(tc.ctx);
+  const res = await app.inject({
+    method: "DELETE",
+    url: `/api/videos/${v.id}?from_peertube=true`,
+  });
+  assert.equal(res.statusCode, 200);
+
+  const after = await app.inject({ method: "GET", url: `/api/videos/${v.id}` });
+  assert.equal(after.statusCode, 404);
+
+  await app.close();
+  tc.cleanup();
+});
+
+test("DELETE /api/channels/:id cascades through per-video delete", async () => {
+  const tc = makeCtx();
+  const { channelA } = seed(tc.ctx);
+  // channelA starts with 2 videos from seed()
+  const app = buildServer(tc.ctx);
+  const res = await app.inject({ method: "DELETE", url: `/api/channels/${channelA}` });
+  assert.equal(res.statusCode, 200);
+  const body = res.json() as { videos_deleted: number; status: string };
+  assert.equal(body.videos_deleted, 2);
+  assert.equal(body.status, "deleted");
+
+  const after = await app.inject({ method: "GET", url: "/api/videos?channel=" + channelA });
+  const list = after.json() as { videos: unknown[] };
+  assert.equal(list.videos.length, 0);
+
+  await app.close();
+  tc.cleanup();
+});

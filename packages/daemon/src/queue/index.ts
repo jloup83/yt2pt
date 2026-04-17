@@ -95,6 +95,27 @@ export class JobQueue {
     await Promise.allSettled(Object.values(this.pools).map((p) => p.stop()));
   }
 
+  /**
+   * Abort the in-flight job for a given video, if any pool is working on
+   * it. Returns true when a job was found and cancelled. The video's DB
+   * row is left untouched — callers are responsible for transitioning it
+   * (e.g. to deleted) once cancellation completes.
+   */
+  cancelVideo(videoId: number): boolean {
+    for (const pool of Object.values(this.pools)) {
+      if (pool.cancelJob(videoId)) return true;
+    }
+    return false;
+  }
+
+  /** True while any pool is actively processing the given video. */
+  isActive(videoId: number): boolean {
+    for (const pool of Object.values(this.pools)) {
+      if (pool.hasJob(videoId)) return true;
+    }
+    return false;
+  }
+
   /** Update progress on a running job and emit an event. */
   reportProgress(videoId: number, pct: number): void {
     const bounded = Math.max(0, Math.min(100, Math.round(pct)));

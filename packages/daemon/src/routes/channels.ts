@@ -12,6 +12,7 @@ import {
   type Channel,
 } from "../db/channels";
 import { findYtDlpBinary, sanitize } from "../workers/paths";
+import { deleteVideoById, PeertubeDeleteError } from "../videos/delete";
 
 // ── YouTube URL validation ──────────────────────────────────────────
 
@@ -215,9 +216,42 @@ export async function registerChannelRoutes(app: FastifyInstance): Promise<void>
       reply.code(404);
       return { error: "not found" };
     }
+    const q = (req.query ?? {}) as { from_peertube?: string };
+    const fromPeertube = q.from_peertube === "true" || q.from_peertube === "1";
+
+    // Cascade through the video delete orchestrator so in-flight jobs
+    // get cancelled, files are removed, and (optionally) PT rows are
+    // deleted with the same semantics as per-video delete.
+    const videoRows = ctx.db
+      .prepare("SELECT id FROM videos WHERE channel_id = ?")
+      .all(id) as { id: number }[];
+
+    const warnings: string[] = [];
+    for (const { id: vid } of videoRows) {
+      try {
+        const r = await deleteVideoById(
+          { db: ctx.db, paths: ctx.paths, logger: ctx.logger, queue: ctx.queue, peertube: ctx.peertube },
+          vid,
+          { fromPeertube },
+        );
+        if (r) warnings.push(...r.warnings.map((w) => `video ${vid}: ${w}`));
+      } catch (err) {
+        if (err instanceof PeertubeDeleteError) {
+          reply.code(502);
+          return { error: err.message, status: err.status, failed_video_id: vid };
+        }
+        throw err;
+      }
+    }
+
     deleteChannel(ctx.db, id);
-    reply.code(204);
-    return null;
+    reply.code(200);
+    return {
+      status: "deleted",
+      id,
+      videos_deleted: videoRows.length,
+      warnings,
+    };
   });
 
   app.get("/api/channels/:id/avatar", async (req, reply) => {

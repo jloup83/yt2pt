@@ -167,7 +167,20 @@ export const endpoints = {
       already_mapped: boolean;
       existing_peertube_channel_id: string | null;
     }>("/peertube/channels/preview-from-youtube", { youtube_url, overrides }),
-  deleteChannel: (id: number) => api.delete<void>(`/channels/${id}`),
+  deleteChannel: (id: number, fromPeertube = false) =>
+    api.delete<{
+      status?: string;
+      videos_deleted?: number;
+      warnings?: string[];
+    }>(`/channels/${id}${fromPeertube ? "?from_peertube=true" : ""}`),
+  deleteVideo: (id: number, fromPeertube = false) =>
+    api.delete<{
+      status: string;
+      id: number;
+      cancelled: boolean;
+      peertube_deleted: boolean | null;
+      warnings: string[];
+    }>(`/videos/${id}${fromPeertube ? "?from_peertube=true" : ""}`),
   syncChannel: (id: number) =>
     api.post<{ status: string; channel_id: number }>(`/channels/${id}/sync`),
   listVideos: (params: URLSearchParams = new URLSearchParams()): Promise<VideoListResponse> => {

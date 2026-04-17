@@ -12,7 +12,7 @@ import {
   runChannelsRemove,
   runChannelsSync,
 } from "./commands/channels";
-import { runVideosAdd, runVideosList } from "./commands/videos";
+import { runVideosAdd, runVideosDelete, runVideosList } from "./commands/videos";
 import { setJsonMode, paint } from "./output/format";
 
 const { version: VERSION } = JSON.parse(
@@ -28,12 +28,13 @@ Usage:
   yt2pt token <username> <password>     Acquire a PeerTube API token
   yt2pt channels list                   List configured channel mappings
   yt2pt channels add <yt-url> <pt-id>   Add a YouTube → PeerTube mapping
-  yt2pt channels remove <id>            Remove a channel mapping
+  yt2pt channels remove <id>            Remove a channel mapping (+ its videos)
   yt2pt channels sync <id>              Trigger sync for a channel (live progress)
   yt2pt videos                          List tracked videos
   yt2pt videos --status=UPLOADING       Filter by status
   yt2pt videos --channel=<id>           Filter by channel
   yt2pt videos add <yt-url> <pt-id>     Queue a single video for sync
+  yt2pt videos delete <id>              Delete a tracked video + local files
   yt2pt help                            Show this help
   yt2pt version                         Show version
 
@@ -41,6 +42,8 @@ Global flags:
   --daemon-url=<url>                    Override daemon URL (default: http://localhost:8090)
   --json                                Emit machine-readable JSON output
   --no-watch                            (channels sync) Don't stream live progress
+  --from-peertube                       (videos delete, channels remove) Also delete on PeerTube
+  --yes, -y                             (videos delete, channels remove) Skip confirmation
   -h, --help                            Show this help
   -v, --version                         Show version
 
@@ -132,7 +135,10 @@ async function dispatch(
             process.stderr.write(`Error: 'channels remove' requires <id>\n`);
             return 1;
           }
-          return runChannelsRemove(client, subArgs[0]);
+          return runChannelsRemove(client, subArgs[0], {
+            fromPeertube: flags["from-peertube"] === true,
+            yes: flags.yes === true || flags.y === true,
+          });
         case "sync":
           if (subArgs.length !== 1) {
             process.stderr.write(`Error: 'channels sync' requires <id>\n`);
@@ -155,6 +161,17 @@ async function dispatch(
           return 1;
         }
         return runVideosAdd(client, subArgs[0], subArgs[1]);
+      }
+      if (rest.length > 0 && (rest[0] === "delete" || rest[0] === "rm")) {
+        const subArgs = rest.slice(1);
+        if (subArgs.length !== 1) {
+          process.stderr.write(`Error: 'videos delete' requires <id>\n`);
+          return 1;
+        }
+        return runVideosDelete(client, subArgs[0], {
+          fromPeertube: flags["from-peertube"] === true,
+          yes: flags.yes === true || flags.y === true,
+        });
       }
       return runVideosList(client, {
         status: typeof flags.status === "string" ? (flags.status as string) : undefined,

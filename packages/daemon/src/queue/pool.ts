@@ -26,6 +26,13 @@ export class WorkerPool {
   private workers: Promise<void>[] = [];
   private controller = new AbortController();
   private wakers: Array<() => void> = [];
+  /**
+   * Per-in-flight-job controllers, keyed by video id. Each is linked to
+   * the pool-wide controller (shutdown aborts all jobs), but can also be
+   * aborted individually by `cancelJob(videoId)` for targeted cancellation
+   * (e.g. the delete flow in #110).
+   */
+  private jobControllers = new Map<number, AbortController>();
 
   constructor(private opts: WorkerPoolOptions) {}
 
@@ -43,6 +50,22 @@ export class WorkerPool {
     const wakers = this.wakers;
     this.wakers = [];
     for (const w of wakers) w();
+  }
+
+  /**
+   * Abort the in-flight job for the given video id, if any. Safe to call
+   * when no such job exists (returns `false`).
+   */
+  cancelJob(videoId: number): boolean {
+    const ctrl = this.jobControllers.get(videoId);
+    if (!ctrl) return false;
+    ctrl.abort();
+    return true;
+  }
+
+  /** True while this pool holds an in-flight job for the given video. */
+  hasJob(videoId: number): boolean {
+    return this.jobControllers.has(videoId);
   }
 
   async stop(): Promise<void> {
@@ -73,8 +96,14 @@ export class WorkerPool {
         await this.park();
         continue;
       }
+      // Chain a per-job controller so callers can cancel this specific
+      // job without shutting the whole pool down.
+      const jobCtrl = new AbortController();
+      const onPoolAbort = (): void => jobCtrl.abort();
+      this.controller.signal.addEventListener("abort", onPoolAbort, { once: true });
+      this.jobControllers.set(video.id, jobCtrl);
       try {
-        await processJob(video, this.controller.signal);
+        await processJob(video, jobCtrl.signal);
         onSuccess(video);
       } catch (err) {
         if (this.controller.signal.aborted) {
@@ -82,7 +111,16 @@ export class WorkerPool {
           logger.debug(`[${name}/${index}] aborted job ${video.id} during shutdown`);
           return;
         }
-        onFailure(video, toError(err));
+        if (jobCtrl.signal.aborted) {
+          // Per-job cancellation (e.g. from a delete request). The caller
+          // is responsible for cleaning up DB state; just log and move on.
+          logger.debug(`[${name}/${index}] cancelled job ${video.id}`);
+        } else {
+          onFailure(video, toError(err));
+        }
+      } finally {
+        this.controller.signal.removeEventListener("abort", onPoolAbort);
+        this.jobControllers.delete(video.id);
       }
     }
   }

@@ -60,9 +60,14 @@ ALTER TABLE videos ADD COLUMN upload_date TEXT;
 CREATE INDEX IF NOT EXISTS idx_videos_upload_date ON videos(upload_date);
 `;
 
+const SCHEMA_V3 = `
+ALTER TABLE videos ADD COLUMN peertube_video_uuid TEXT;
+`;
+
 const MIGRATIONS: Migration[] = [
   { version: 1, up: SCHEMA_V1 },
   { version: 2, up: SCHEMA_V2 },
+  { version: 3, up: SCHEMA_V3 },
 ];
 
 export function runMigrations(db: Database): void {

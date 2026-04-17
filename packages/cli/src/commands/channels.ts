@@ -56,19 +56,63 @@ export async function runChannelsAdd(client: ApiClient, ytUrl: string, ptId: str
   return 0;
 }
 
-export async function runChannelsRemove(client: ApiClient, id: string): Promise<number> {
+export interface ChannelsRemoveOptions {
+  fromPeertube?: boolean;
+  yes?: boolean;
+}
+
+export async function runChannelsRemove(
+  client: ApiClient,
+  id: string,
+  opts: ChannelsRemoveOptions = {},
+): Promise<number> {
   const n = Number(id);
   if (!Number.isInteger(n) || n <= 0) {
     process.stderr.write(`Error: channel id must be a positive integer\n`);
     return 1;
   }
-  await client.request(`/api/channels/${n}`, { method: "DELETE" });
+  if (!opts.yes && !isJsonMode()) {
+    const target = opts.fromPeertube ? " AND delete its videos from PeerTube" : "";
+    const ok = await confirm(
+      `Remove channel #${n} and all its tracked videos${target}? [y/N] `,
+    );
+    if (!ok) {
+      process.stdout.write("Aborted.\n");
+      return 1;
+    }
+  }
+  const query = opts.fromPeertube ? "?from_peertube=true" : "";
+  const res = await client.request<{
+    status?: string;
+    videos_deleted?: number;
+    warnings?: string[];
+  }>(`/api/channels/${n}${query}`, { method: "DELETE" });
   if (isJsonMode()) {
-    printJson({ ok: true, id: n });
+    printJson({ ok: true, id: n, ...res });
     return 0;
   }
-  process.stdout.write(`${paint("✓", "green")} Removed channel #${n}\n`);
+  const count = res?.videos_deleted ?? 0;
+  process.stdout.write(
+    `${paint("✓", "green")} Removed channel #${n} (${count} video${count === 1 ? "" : "s"} deleted)\n`,
+  );
+  for (const w of res?.warnings ?? []) {
+    process.stdout.write(`  ${paint("!", "yellow")} ${w}\n`);
+  }
   return 0;
+}
+
+async function confirm(prompt: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    process.stdout.write(prompt);
+    const onData = (buf: Buffer): void => {
+      process.stdin.pause();
+      process.stdin.off("data", onData);
+      const answer = buf.toString("utf8").trim().toLowerCase();
+      resolve(answer === "y" || answer === "yes");
+    };
+    process.stdin.resume();
+    process.stdin.on("data", onData);
+  });
 }
 
 // ── Sync (with live progress from SSE) ──────────────────────────────
