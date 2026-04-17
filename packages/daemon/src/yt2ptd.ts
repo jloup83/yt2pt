@@ -60,6 +60,7 @@ async function main(): Promise<void> {
     logger,
     queue,
     ytdlpBinary: () => findYtDlpBinary(paths.binDir),
+    dataDir: paths.dataDir,
   });
 
   const webRoot = process.env.YT2PT_WEB_ROOT
