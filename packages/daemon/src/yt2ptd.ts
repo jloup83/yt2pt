@@ -55,7 +55,7 @@ async function main(): Promise<void> {
     ? resolve(process.env.YT2PT_WEB_ROOT)
     : resolve(__dirname, "..", "..", "web", "dist");
 
-  const app = buildServer({ config, paths, db, logger, peertube }, { webRoot });
+  const app = buildServer({ config, paths, db, logger, peertube, queue }, { webRoot });
 
   const shutdown = async (signal: string): Promise<void> => {
     logger.info(`Received ${signal}, shutting down...`);

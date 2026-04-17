@@ -5,9 +5,12 @@ import { existsSync } from "node:fs";
 import type { Database } from "better-sqlite3";
 import type { Config, Logger, ResolvedPaths } from "@yt2pt/shared";
 import type { PeertubeConnection } from "./peertube/connection";
+import type { JobQueue } from "./queue";
 import { registerSettingsRoutes } from "./routes/settings";
 import { registerPeertubeRoutes } from "./routes/peertube";
 import { registerChannelRoutes } from "./routes/channels";
+import { registerVideoRoutes } from "./routes/videos";
+import { registerEventsRoutes } from "./routes/events";
 
 export interface ServerContext {
   config: Config;
@@ -15,6 +18,7 @@ export interface ServerContext {
   db: Database;
   logger: Logger;
   peertube?: PeertubeConnection;
+  queue?: JobQueue;
 }
 
 export interface BuildServerOptions {
@@ -43,10 +47,16 @@ export function buildServer(ctx: ServerContext, opts: BuildServerOptions = {}): 
   app.register(registerSettingsRoutes);
 
   // PeerTube status + channels API.
+  app.register(registerPeertubeRoutes);
 
   // YouTube → PeerTube channel mapping API.
   app.register(registerChannelRoutes);
-  app.register(registerPeertubeRoutes);
+
+  // Video list / detail API.
+  app.register(registerVideoRoutes);
+
+  // SSE events stream.
+  app.register(registerEventsRoutes);
 
   // Static Vue build — mounted only if the directory exists.
   if (opts.webRoot && existsSync(opts.webRoot)) {
