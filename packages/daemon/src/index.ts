@@ -38,3 +38,6 @@ export type { ValidationError } from "./routes/settings";
 
 export { registerPeertubeRoutes, fetchUserChannels } from "./routes/peertube";
 export type { PeertubeChannel } from "./routes/peertube";
+
+export { registerChannelRoutes, normalizeYoutubeChannelUrl, resolveYoutubeChannelName, summarizeChannel } from "./routes/channels";
+export type { ChannelSummary } from "./routes/channels";

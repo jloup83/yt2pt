@@ -7,6 +7,7 @@ import type { Config, Logger, ResolvedPaths } from "@yt2pt/shared";
 import type { PeertubeConnection } from "./peertube/connection";
 import { registerSettingsRoutes } from "./routes/settings";
 import { registerPeertubeRoutes } from "./routes/peertube";
+import { registerChannelRoutes } from "./routes/channels";
 
 export interface ServerContext {
   config: Config;
@@ -42,6 +43,9 @@ export function buildServer(ctx: ServerContext, opts: BuildServerOptions = {}): 
   app.register(registerSettingsRoutes);
 
   // PeerTube status + channels API.
+
+  // YouTube → PeerTube channel mapping API.
+  app.register(registerChannelRoutes);
   app.register(registerPeertubeRoutes);
 
   // Static Vue build — mounted only if the directory exists.
