@@ -54,7 +54,12 @@ function toOriginallyPublishedAt(uploadDate: string | null): string | null {
   return `${uploadDate.slice(0, 4)}-${uploadDate.slice(4, 6)}-${uploadDate.slice(6, 8)}T00:00:00.000Z`;
 }
 
-function buildUploadVideo(raw: Record<string, unknown>, videoFile: string, config: Config): Record<string, unknown> {
+function buildUploadVideo(
+  raw: Record<string, unknown>,
+  videoFile: string,
+  config: Config,
+  peertubeChannelId: string,
+): Record<string, unknown> {
   const title = raw["title"] as string;
   const categories = raw["categories"] as string[] | null;
   const tags = raw["tags"] as string[] | null;
@@ -70,7 +75,7 @@ function buildUploadVideo(raw: Record<string, unknown>, videoFile: string, confi
     tags: filterTags(tags),
     nsfw: false,
     privacy: PRIVACY_MAP[config.peertube.privacy] ?? 1,
-    channelId: config.peertube.channel_id,
+    channelId: peertubeChannelId,
     originallyPublishedAt: toOriginallyPublishedAt(uploadDate),
     waitTranscoding: config.peertube.wait_transcoding,
     commentsPolicy: COMMENTS_POLICY_MAP[config.peertube.comments_policy] ?? 1,
@@ -99,14 +104,25 @@ function buildSetChapters(
  * Convert one downloaded-video folder into a PeerTube upload folder.
  * Throws on failure.
  */
+export interface RunConvertOptions {
+  /** Destination PeerTube channel id for this video. Required — empty values fail fast. */
+  peertubeChannelId: string;
+}
+
 export async function runConvert(
   sourcePath: string,
   targetPath: string,
   config: Config,
   log: Logger,
+  options: RunConvertOptions,
   signal?: AbortSignal
 ): Promise<void> {
   if (signal?.aborted) throw new Error("aborted");
+  if (!options.peertubeChannelId) {
+    throw new Error(
+      "no peertube channel id available for this video (set channels.peertube_channel_id or peertube.channel_id)",
+    );
+  }
 
   log.info(`[convert] converting metadata → ${targetPath}`);
   const started = Date.now();
@@ -126,7 +142,7 @@ export async function runConvert(
   if (signal?.aborted) throw new Error("aborted");
 
   // upload_video.json
-  const uploadVideo = buildUploadVideo(raw, videoFile, config);
+  const uploadVideo = buildUploadVideo(raw, videoFile, config, options.peertubeChannelId);
   await writeFile(join(targetPath, "upload_video.json"), JSON.stringify(uploadVideo, null, 2) + "\n");
 
   // Thumbnail + set_thumbnail.json

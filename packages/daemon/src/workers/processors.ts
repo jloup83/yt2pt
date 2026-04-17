@@ -5,6 +5,7 @@ import type { JobProcessor } from "../queue/pool";
 import type { JobQueue } from "../queue";
 import type { PeertubeConnection } from "../peertube/connection";
 import { updateVideo } from "../db/videos";
+import { getChannelById } from "../db/channels";
 import { findYtDlpBinary, channelSlugFromFolderName, youtubeUrl } from "./paths";
 import { runDownload } from "./download";
 import { runConvert } from "./convert";
@@ -61,10 +62,23 @@ export function createProcessors(ctx: ProcessorContext): Processors {
     if (!channelSlug) throw new Error(`cannot parse channel slug from folder_name: ${video.folder_name}`);
     const sourcePath = resolve(paths.dataDir, "downloaded_from_youtube", channelSlug, video.folder_name);
     const targetPath = resolve(paths.dataDir, "upload_to_peertube", channelSlug, video.folder_name);
+
+    // Resolve the destination PeerTube channel id: per-channel row wins over the
+    // global TOML fallback; fail fast if neither is set (avoids wasting a whole
+    // convert just to have upload throw later).
+    const channelRow = getChannelById(db, video.channel_id);
+    const peertubeChannelId =
+      (channelRow?.peertube_channel_id ?? "") || config.peertube.channel_id;
+    if (!peertubeChannelId) {
+      throw new Error(
+        `no peertube channel id for video ${video.id} (channel ${video.channel_id} has no peertube_channel_id and peertube.channel_id is unset)`,
+      );
+    }
+
     logger.info(`[convert] video ${video.id}: starting → ${targetPath}`);
     const started = Date.now();
     queue.reportProgress(video.id, 10);
-    await runConvert(sourcePath, targetPath, config, logger, signal);
+    await runConvert(sourcePath, targetPath, config, logger, { peertubeChannelId }, signal);
     queue.reportProgress(video.id, 100);
     logger.info(`[convert] video ${video.id}: complete (${Date.now() - started}ms)`);
   };
