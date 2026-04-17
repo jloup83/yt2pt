@@ -78,7 +78,7 @@ const DEFAULTS: Config = {
     upload_concurrency: 1,
   },
   ytdlp: {
-    format: "bv*+ba/b",
+    format: "bv*[height<=1080]+ba/b[height<=1080]",
     merge_output_format: "mkv",
     thumbnail_format: "jpg",
   },

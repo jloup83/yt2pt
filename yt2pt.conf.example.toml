@@ -25,7 +25,8 @@ convert_concurrency = 1
 upload_concurrency = 1
 
 [ytdlp]
-format = "bv*+ba/b"
+# Cap at 1080p by default. Override to "bv*+ba/b" for absolute best quality.
+format = "bv*[height<=1080]+ba/b[height<=1080]"
 merge_output_format = "mkv"
 thumbnail_format = "jpg"
 
