@@ -41,3 +41,9 @@ export type { PeertubeChannel } from "./routes/peertube";
 
 export { registerChannelRoutes, normalizeYoutubeChannelUrl, resolveYoutubeChannelName, summarizeChannel } from "./routes/channels";
 export type { ChannelSummary } from "./routes/channels";
+
+export { registerVideoRoutes, listVideosWithChannel, getVideoWithChannel, parseStatuses } from "./routes/videos";
+export type { VideoWithChannel, ListVideosParams, ListVideosResult } from "./routes/videos";
+
+export { registerEventsRoutes, formatSseFrame, videoToStatusEvent } from "./routes/events";
+export type { VideoStatusEvent } from "./routes/events";
