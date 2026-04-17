@@ -28,9 +28,13 @@ ProtectControlGroups=true
 RestrictSUIDSGID=true
 RestrictNamespaces=true
 LockPersonality=true
-MemoryDenyWriteExecute=true
+# Note: MemoryDenyWriteExecute is intentionally NOT set.
+# Node.js (V8) requires RWX pages for JIT compilation; enabling it causes
+# the daemon to crash on startup with SIGTRAP.
 RestrictRealtime=true
-RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+# AF_NETLINK is required by os.networkInterfaces() (used by Fastify on
+# listen) to enumerate local interfaces via the kernel netlink socket.
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
 
 [Install]
 WantedBy=multi-user.target
