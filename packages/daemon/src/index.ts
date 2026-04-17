@@ -13,3 +13,12 @@ export type { Video, InsertVideoInput, UpdateVideoInput } from "./db/videos";
 
 export { buildServer } from "./server";
 export type { ServerContext, BuildServerOptions } from "./server";
+
+export { JobQueue } from "./queue";
+export type { JobQueueOptions, JobQueueProcessors } from "./queue";
+export { QueueEvents } from "./queue/events";
+export type { QueueEventMap } from "./queue/events";
+export { WorkerPool } from "./queue/pool";
+export type { JobProcessor, WorkerPoolOptions } from "./queue/pool";
+export { STAGES, claimNextJob, markJobSucceeded, markJobFailed, resetStaleJobs } from "./queue/transitions";
+export type { Stage } from "./queue/transitions";
