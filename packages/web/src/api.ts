@@ -142,6 +142,28 @@ export const endpoints = {
     api.post<{ status: string; video_id: number; channel_id: number }>(
       "/videos", { youtube_url, peertube_channel_id },
     ),
+  createPeertubeChannelFromYoutube: (
+    youtube_url: string,
+    overrides?: { name?: string; displayName?: string; description?: string; support?: string },
+  ) =>
+    api.post<{
+      mapping: { id: number; youtube_channel_url: string; peertube_channel_id: string };
+      peertube_channel: { id: number; name: string; displayName: string };
+      payload: { name: string; displayName: string; description: string; support: string };
+      warnings: string[];
+    }>("/peertube/channels/create-from-youtube", { youtube_url, overrides }),
+  previewPeertubeChannelFromYoutube: (
+    youtube_url: string,
+    overrides?: { name?: string; displayName?: string; description?: string; support?: string },
+  ) =>
+    api.post<{
+      youtube_channel_url: string;
+      payload: { name: string; displayName: string; description: string; support: string };
+      has_avatar: boolean;
+      has_banner: boolean;
+      already_mapped: boolean;
+      existing_peertube_channel_id: string | null;
+    }>("/peertube/channels/preview-from-youtube", { youtube_url, overrides }),
   deleteChannel: (id: number) => api.delete<void>(`/channels/${id}`),
   syncChannel: (id: number) =>
     api.post<{ status: string; channel_id: number }>(`/channels/${id}/sync`),
