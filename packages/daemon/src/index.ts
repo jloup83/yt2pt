@@ -22,3 +22,10 @@ export { WorkerPool } from "./queue/pool";
 export type { JobProcessor, WorkerPoolOptions } from "./queue/pool";
 export { STAGES, claimNextJob, markJobSucceeded, markJobFailed, resetStaleJobs } from "./queue/transitions";
 export type { Stage } from "./queue/transitions";
+
+export { PeertubeConnection } from "./peertube/connection";
+export type {
+  ConnectionStatus,
+  AcquireTokenResult,
+  PeertubeConnectionOptions,
+} from "./peertube/connection";

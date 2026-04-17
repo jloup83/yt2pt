@@ -4,12 +4,14 @@ import fastifyStatic from "@fastify/static";
 import { existsSync } from "node:fs";
 import type { Database } from "better-sqlite3";
 import type { Config, Logger, ResolvedPaths } from "@yt2pt/shared";
+import type { PeertubeConnection } from "./peertube/connection";
 
 export interface ServerContext {
   config: Config;
   paths: ResolvedPaths;
   db: Database;
   logger: Logger;
+  peertube?: PeertubeConnection;
 }
 
 export interface BuildServerOptions {
