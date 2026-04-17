@@ -126,10 +126,21 @@ export type SettingsPatch = {
 };
 export interface TokenResponse { success: boolean; token?: string; error?: string }
 
+// ── PeerTube channels (for the Add Channel dropdown) ──────────────
+export interface PeertubeChannel { id: number; name: string; displayName: string }
+export interface PeertubeChannelList { channels: PeertubeChannel[]; cached?: boolean }
+
 export const endpoints = {
   health: () => api.get<HealthResponse>("/health"),
   peertubeStatus: () => api.get<PeertubeStatus>("/peertube/status"),
+  peertubeChannels: (refresh = false) =>
+    api.get<PeertubeChannelList>(`/peertube/channels${refresh ? "?refresh=1" : ""}`),
   listChannels: () => api.get<{ channels: ChannelSummary[] }>("/channels"),
+  addChannel: (youtube_channel_url: string, peertube_channel_id: string) =>
+    api.post<ChannelSummary>("/channels", { youtube_channel_url, peertube_channel_id }),
+  deleteChannel: (id: number) => api.delete<void>(`/channels/${id}`),
+  syncChannel: (id: number) =>
+    api.post<{ status: string; channel_id: number }>(`/channels/${id}/sync`),
   listVideos: (params: URLSearchParams = new URLSearchParams()): Promise<VideoListResponse> => {
     const qs = params.toString();
     return api.get<VideoListResponse>(`/videos${qs ? `?${qs}` : ""}`);
