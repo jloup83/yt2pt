@@ -1,4 +1,5 @@
 import { execFile } from "node:child_process";
+import type { Logger } from "@yt2pt/shared";
 
 // ── YouTube video URL validation ────────────────────────────────────
 
@@ -58,7 +59,8 @@ export interface ResolvedYoutubeVideo {
 
 export type VideoResolver = (url: string) => Promise<ResolvedYoutubeVideo>;
 
-function execFileP(cmd: string, args: string[], timeoutMs = 30_000): Promise<string> {
+function execFileP(cmd: string, args: string[], timeoutMs = 30_000, log?: Logger): Promise<string> {
+  log?.debug(`$ ${shellQuote(cmd, args)}`);
   return new Promise((resolvePromise, reject) => {
     execFile(
       cmd, args,
@@ -71,13 +73,24 @@ function execFileP(cmd: string, args: string[], timeoutMs = 30_000): Promise<str
   });
 }
 
+function shellQuote(cmd: string, args: string[]): string {
+  const q = (s: string): string =>
+    /^[A-Za-z0-9_./:@=+,-]+$/.test(s) ? s : `'${s.replace(/'/g, "'\\''")}'`;
+  return [cmd, ...args].map(q).join(" ");
+}
+
 /**
  * Default implementation of `VideoResolver`: invokes yt-dlp with
  * `--dump-json --skip-download` to fetch metadata for a single video.
  */
-export function makeDefaultVideoResolver(ytdlp: string): VideoResolver {
+export function makeDefaultVideoResolver(ytdlp: string, log?: Logger): VideoResolver {
   return async (url) => {
-    const stdout = await execFileP(ytdlp, ["--dump-json", "--skip-download", "--no-warnings", url]);
+    const stdout = await execFileP(
+      ytdlp,
+      ["--dump-json", "--skip-download", "--no-warnings", url],
+      30_000,
+      log,
+    );
     const meta = JSON.parse(stdout) as Record<string, unknown>;
     const id = meta["id"];
     if (typeof id !== "string" || !VIDEO_ID_RE.test(id)) {

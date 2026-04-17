@@ -261,7 +261,7 @@ export async function registerVideoRoutes(app: FastifyInstance): Promise<void> {
     } else {
       try {
         const ytdlp = await findYtDlpBinary(ctx.paths.binDir);
-        resolver = makeDefaultVideoResolver(ytdlp);
+        resolver = makeDefaultVideoResolver(ytdlp, ctx.logger);
       } catch (err) {
         ctx.logger.error(
           `yt-dlp binary unavailable: ${err instanceof Error ? err.message : String(err)}`

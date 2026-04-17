@@ -32,10 +32,33 @@ export class PeertubeConnection {
   private authenticated = false;
   private username: string | null = null;
   private pollTimer: NodeJS.Timeout | null = null;
+  private rawFetch: FetchFn;
   private fetch: FetchFn;
 
   constructor(private opts: PeertubeConnectionOptions) {
-    this.fetch = opts.fetch ?? globalThis.fetch.bind(globalThis);
+    this.rawFetch = opts.fetch ?? globalThis.fetch.bind(globalThis);
+    this.fetch = this.loggingFetch.bind(this);
+  }
+
+  /**
+   * Thin wrapper around the underlying fetch that emits a debug line
+   * for every PeerTube API call: method, URL, body kind+size (with
+   * Authorization redacted) before the call, and status+duration after.
+   */
+  private async loggingFetch(input: Parameters<FetchFn>[0], init: RequestInit = {}): Promise<Response> {
+    const url = typeof input === "string" ? input : input.toString();
+    const method = (init.method ?? "GET").toUpperCase();
+    const bodyDesc = describeBody(init.body);
+    const t0 = Date.now();
+    this.opts.logger.debug(`→ ${method} ${url}${bodyDesc ? ` body=${bodyDesc}` : ""}`);
+    try {
+      const res = await this.rawFetch(input, init);
+      this.opts.logger.debug(`← ${method} ${url} ${res.status} (${Date.now() - t0}ms)`);
+      return res;
+    } catch (err) {
+      this.opts.logger.debug(`✗ ${method} ${url} failed after ${Date.now() - t0}ms: ${errMsg(err)}`);
+      throw err;
+    }
   }
 
   // ── Accessors ────────────────────────────────────────────────────
@@ -254,4 +277,49 @@ export class PeertubeConnection {
 
 function errMsg(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
+}
+
+/**
+ * Short, redacted description of a fetch body for debug logs. Never
+ * emits raw token/password values: form fields `password` and
+ * `client_secret` are masked; JSON bodies with an `api_token` field
+ * would not normally flow here (we don't POST tokens back to PT).
+ */
+function describeBody(body: RequestInit["body"] | null | undefined): string {
+  if (body == null) return "";
+  if (typeof body === "string") {
+    // form-urlencoded (string) — redact sensitive fields.
+    if (body.includes("=") && body.includes("&") === false && body.length < 2) return `str(${body.length})`;
+    try {
+      const params = new URLSearchParams(body);
+      const parts: string[] = [];
+      for (const [k, v] of params.entries()) {
+        const redacted = k === "password" || k === "client_secret" || k === "access_token";
+        parts.push(`${k}=${redacted ? "***" : truncate(v, 60)}`);
+      }
+      return `form{${parts.join(", ")}}`;
+    } catch {
+      return `str(${body.length})`;
+    }
+  }
+  if (body instanceof URLSearchParams) {
+    const parts: string[] = [];
+    for (const [k, v] of body.entries()) {
+      const redacted = k === "password" || k === "client_secret" || k === "access_token";
+      parts.push(`${k}=${redacted ? "***" : truncate(v, 60)}`);
+    }
+    return `form{${parts.join(", ")}}`;
+  }
+  if (typeof FormData !== "undefined" && body instanceof FormData) {
+    const keys: string[] = [];
+    for (const [k] of body.entries()) keys.push(k);
+    return `multipart{${keys.join(", ")}}`;
+  }
+  if (body instanceof ArrayBuffer) return `bytes(${body.byteLength})`;
+  if (ArrayBuffer.isView(body)) return `bytes(${body.byteLength})`;
+  return "body(?)";
+}
+
+function truncate(s: string, max: number): string {
+  return s.length > max ? `${s.slice(0, max)}…` : s;
 }

@@ -174,13 +174,15 @@ export class SyncEngine extends EventEmitter<SyncEngineEvents> {
     }
 
     const spawner = this.opts.spawner ?? defaultSpawn;
-    const child = spawner(binary, [
+    const syncArgs = [
       "--flat-playlist",
       "--dump-json",
       "--no-warnings",
       "--ignore-errors",
       channel.youtube_channel_url,
-    ]);
+    ];
+    this.opts.logger.debug(`$ ${shellQuote(binary, syncArgs)}`);
+    const child = spawner(binary, syncArgs);
 
     let newVideos = 0;
     let alreadyTracked = 0;
@@ -303,6 +305,12 @@ function normalizeUploadDate(entry: FlatPlaylistEntry): string | null {
 
 function defaultSpawn(binary: string, args: string[]): ChildProcessWithoutNullStreams {
   return spawn(binary, args) as ChildProcessWithoutNullStreams;
+}
+
+function shellQuote(cmd: string, args: string[]): string {
+  const q = (s: string): string =>
+    /^[A-Za-z0-9_./:@=+,-]+$/.test(s) ? s : `'${s.replace(/'/g, "'\\''")}'`;
+  return [cmd, ...args].map(q).join(" ");
 }
 
 function waitForExit(child: ChildProcessWithoutNullStreams): Promise<number> {
