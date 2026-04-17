@@ -375,9 +375,11 @@ onMounted(async () => {
     </div>
   </article>
 
-  <!-- ── Add channel ──────────────────────────────────────────── -->
+  <!-- ── Sync channel ─────────────────────────────────────────── -->
   <article>
-    <header><strong>Add channel</strong></header>
+    <header><strong>Sync channel</strong></header>
+    <p><small>Map a YouTube channel to an existing PeerTube channel and queue every video
+      for download &amp; upload. Re-running picks up new videos only.</small></p>
     <form @submit.prevent="onAddChannel">
       <label>
         YouTube channel URL
