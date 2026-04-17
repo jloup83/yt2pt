@@ -1,6 +1,6 @@
 {
   "name": "yt2pt",
-  "version": "0.2.0-beta",
+  "version": "0.2.0",
   "description": "Download YouTube videos with metadata and thumbnails for PeerTube migration",
   "main": "dist/index.js",
   "bin": {
@@ -14,7 +14,11 @@
     "type": "git",
     "url": "git+https://github.com/jloup83/yt2pt.git"
   },
-  "keywords": ["youtube", "peertube", "yt-dlp"],
+  "keywords": [
+    "youtube",
+    "peertube",
+    "yt-dlp"
+  ],
   "author": "Jean-Loup TAILLEFUMIRE",
   "license": "MIT",
   "bugs": {
