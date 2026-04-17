@@ -1,0 +1,26 @@
+{
+  "yt2pt": {
+    "data_dir": "data",
+    "log_level": "info",
+    "overwrite_existing": false,
+    "skip_downloaded": true,
+    "remove_video_after_upload": false,
+    "remove_video_after_metadata_conversion": false
+  },
+  "ytdlp": {
+    "format": "bv*+ba/b",
+    "merge_output_format": "mkv",
+    "thumbnail_format": "jpg"
+  },
+  "peertube": {
+    "instance_url": "",
+    "api_token": "",
+    "channel_id": "",
+    "privacy": "public",
+    "language": "",
+    "licence": "",
+    "comments_policy": "enabled",
+    "wait_transcoding": true,
+    "generate_transcription": true
+  }
+}

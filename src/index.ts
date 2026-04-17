@@ -1,87 +1,41 @@
 #!/usr/bin/env node
 
-import { execFile } from "node:child_process";
 import { readFileSync } from "node:fs";
-import { mkdir, writeFile, access, readdir } from "node:fs/promises";
-import { join, resolve, extname } from "node:path";
+import { access, readdir } from "node:fs/promises";
+import { join, resolve } from "node:path";
+import { loadConfig, printConfig } from "./config";
+import { createLogger } from "./logger";
+import { downloadFromYouTube } from "./download";
+import { convertMetadata } from "./convert";
+import { uploadToPeertube } from "./upload";
 
 const { version: VERSION } = JSON.parse(
   readFileSync(resolve(__dirname, "..", "package.json"), "utf-8")
 );
 
-const HELP = `yt2pt v${VERSION} — Download YouTube videos with metadata and thumbnails
+const HELP = `yt2pt v${VERSION} — Download YouTube videos and upload to PeerTube
 
 Usage:
-  yt2pt <youtube-url>    Download video, thumbnail, and metadata
-  yt2pt -h, --help       Show this help
-  yt2pt -v, --version    Show version
+  yt2pt <youtube-url>                 Download video from YouTube
+  yt2pt <youtube-url> --download-only Download video from YouTube
+  yt2pt --convert-metadata            Convert all downloaded metadata for PeerTube
+  yt2pt --upload-only                 Upload all converted videos to PeerTube
+  yt2pt <youtube-url> --upload-only   Upload a specific video to PeerTube
+  yt2pt -h, --help                    Show this help
+  yt2pt -v, --version                 Show version
 
 Examples:
   yt2pt https://www.youtube.com/watch?v=q5Mq4kEa7pA
   yt2pt https://youtu.be/q5Mq4kEa7pA
 `;
 
-const METADATA_FIELDS = [
-  "channel",
-  "channel_id",
-  "channel_url",
-  "id",
-  "title",
-  "ext",
-  "description",
-  "upload_date",
-  "webpage_url",
-  "duration",
-  "duration_string",
-  "language",
-  "categories",
-  "tags",
-] as const;
-
-interface VideoMetadata {
-  channel: string;
-  channel_id: string;
-  channel_url: string;
-  id: string;
-  title: string;
-  ext: string;
-  description: string;
-  upload_date: string;
-  video_url: string;
-  duration: number | null;
-  duration_string: string | null;
-  language: string | null;
-  categories: string[] | null;
-  tags: string[] | null;
-  thumbnail: string;
-}
-
-function sanitize(name: string): string {
-  return name
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "") // strip accents
-    .toLowerCase()
-    .replace(/'/g, "")
-    .replace(/[<>:"/\\|?*\x00-\x1f]/g, "_")
-    .replace(/\s+/g, "_")
-    .replace(/_+/g, "_")
-    .replace(/^[._]+|[._]+$/g, "");
-}
-
-function formatDate(yyyymmdd: string): string {
-  return `${yyyymmdd.slice(0, 4)}-${yyyymmdd.slice(4, 6)}-${yyyymmdd.slice(6, 8)}`;
-}
-
-function run(cmd: string, args: string[]): Promise<{ stdout: string; stderr: string }> {
-  return new Promise((resolve, reject) => {
-    execFile(cmd, args, { maxBuffer: 50 * 1024 * 1024 }, (error, stdout, stderr) => {
-      if (error) {
-        reject(new Error(`${cmd} failed: ${stderr || error.message}`));
-      } else {
-        resolve({ stdout, stderr });
-      }
-    });
-  });
+function isYouTubeUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    return /^(www\.)?(youtube\.com|youtu\.be|m\.youtube\.com|music\.youtube\.com)$/.test(parsed.hostname);
+  } catch {
+    return false;
+  }
 }
 
 async function findYtDlpBinary(): Promise<string> {
@@ -114,77 +68,6 @@ async function findYtDlpBinary(): Promise<string> {
   return join(binDir, ytdlp);
 }
 
-function isYouTubeUrl(url: string): boolean {
-  try {
-    const parsed = new URL(url);
-    return /^(www\.)?(youtube\.com|youtu\.be|m\.youtube\.com|music\.youtube\.com)$/.test(parsed.hostname);
-  } catch {
-    return false;
-  }
-}
-
-async function fetchMetadata(ytdlp: string, url: string): Promise<Record<string, unknown>> {
-  const { stdout } = await run(ytdlp, ["--dump-json", "--skip-download", url]);
-  return JSON.parse(stdout) as Record<string, unknown>;
-}
-
-function buildMetadata(raw: Record<string, unknown>): VideoMetadata {
-  const meta: Record<string, unknown> = {};
-  for (const field of METADATA_FIELDS) {
-    if (field === "webpage_url") {
-      meta["video_url"] = raw[field] ?? null;
-    } else {
-      meta[field] = raw[field] ?? null;
-    }
-  }
-  // thumbnail field will be set after download
-  meta["thumbnail"] = "";
-  return meta as unknown as VideoMetadata;
-}
-
-async function downloadVideo(
-  ytdlp: string,
-  url: string,
-  outputDir: string,
-  videoFilename: string
-): Promise<void> {
-  const outputPath = join(outputDir, videoFilename);
-  await run(ytdlp, [
-    "-f",
-    "bv*+ba/b", // best video + best audio, fallback to best combined
-    "--merge-output-format",
-    "mkv",
-    "-o",
-    outputPath,
-    url,
-  ]);
-}
-
-async function downloadThumbnail(
-  ytdlp: string,
-  url: string,
-  outputDir: string
-): Promise<string> {
-  // Download just the thumbnail
-  await run(ytdlp, [
-    "--skip-download",
-    "--write-thumbnail",
-    "--convert-thumbnails",
-    "jpg",
-    "-o",
-    join(outputDir, "thumbnail"),
-    url,
-  ]);
-
-  // yt-dlp names thumbnail files as thumbnail.jpg
-  const entries = await readdir(outputDir);
-  const thumb = entries.find((f) => f.startsWith("thumbnail") && f !== "thumbnail" && !f.endsWith(".part"));
-  if (!thumb) {
-    throw new Error("Failed to download thumbnail");
-  }
-  return thumb;
-}
-
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
 
@@ -198,75 +81,52 @@ async function main(): Promise<void> {
     process.exit(0);
   }
 
-  const url = args[0]!;
+  const flags = args.filter((a) => a.startsWith("--"));
+  const positional = args.filter((a) => !a.startsWith("-"));
+  const url = positional[0];
+
+  const hasDownloadOnly = flags.includes("--download-only");
+  const hasConvertMetadata = flags.includes("--convert-metadata");
+  const hasUploadOnly = flags.includes("--upload-only");
+
+  // Load and display configuration
+  const { config, overrides } = loadConfig();
+  const log = createLogger(config);
+  printConfig(config, overrides, log);
+
+  // ── Convert metadata ──────────────────────────────────────────────
+  if (hasConvertMetadata) {
+    await convertMetadata(config, log);
+    process.exit(0);
+  }
+
+  // ── Upload only ───────────────────────────────────────────────────
+  if (hasUploadOnly) {
+    await uploadToPeertube(config, log);
+    process.exit(0);
+  }
+
+  // ── Download (default) ────────────────────────────────────────────
+  if (!url) {
+    console.error("Error: A YouTube URL is required for download mode");
+    process.exit(1);
+  }
 
   if (!isYouTubeUrl(url)) {
     console.error(`Error: Invalid YouTube URL: ${url}`);
     process.exit(1);
   }
 
-  // Find yt-dlp binary
   let ytdlp: string;
   try {
     ytdlp = await findYtDlpBinary();
+    log.debug(`yt-dlp binary: ${ytdlp}`);
   } catch (err) {
-    console.error(`Error: ${(err as Error).message}`);
+    log.error(`${(err as Error).message}`);
     process.exit(1);
   }
 
-  console.log("Fetching video metadata...");
-  let rawMeta: Record<string, unknown>;
-  try {
-    rawMeta = await fetchMetadata(ytdlp, url);
-  } catch (err) {
-    console.error(`Error: Failed to fetch metadata. ${(err as Error).message}`);
-    process.exit(1);
-  }
-
-  const meta = buildMetadata(rawMeta);
-
-  const channelDir = sanitize(meta.channel);
-  const videoTitle = sanitize(meta.title);
-  const publishedDate = formatDate(meta.upload_date);
-  const videoId = meta.id;
-
-  const folderName = `${channelDir}_${publishedDate}_${videoTitle}_[${videoId}]`;
-  const videoFilename = `${channelDir}_${publishedDate}_${videoTitle}_[${videoId}]`;
-
-  const outputDir = resolve("downloads", channelDir, folderName);
-  await mkdir(outputDir, { recursive: true });
-
-  console.log(`Downloading video to ${outputDir}/...`);
-  try {
-    await downloadVideo(ytdlp, url, outputDir, videoFilename);
-  } catch (err) {
-    console.error(`Error: Failed to download video. ${(err as Error).message}`);
-    process.exit(1);
-  }
-
-  // Determine the actual video file extension
-  const files = await readdir(outputDir);
-  const videoFile = files.find((f) => f.startsWith(videoFilename) && !f.endsWith(".part"));
-  const actualExt = videoFile ? extname(videoFile).slice(1) : "mkv";
-  meta.ext = actualExt;
-
-  console.log("Downloading thumbnail...");
-  try {
-    const thumbFilename = await downloadThumbnail(ytdlp, url, outputDir);
-    meta.thumbnail = thumbFilename;
-  } catch (err) {
-    console.error(`Warning: Failed to download thumbnail. ${(err as Error).message}`);
-    meta.thumbnail = "";
-  }
-
-  // Write metadata.json
-  await writeFile(join(outputDir, "metadata.json"), JSON.stringify(meta, null, 2) + "\n");
-
-  console.log(`\nDone! Files saved to:\n  ${outputDir}/`);
-  const finalFiles = await readdir(outputDir);
-  for (const f of finalFiles) {
-    console.log(`  - ${f}`);
-  }
+  await downloadFromYouTube(ytdlp, url, config, log);
 }
 
 main();

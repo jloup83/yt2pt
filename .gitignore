@@ -1,3 +1,6 @@
 node_modules/
 dist/
-downloads/
+data/
+.DS_Store
+yt2pt.conf.json
+yt2pt.log
