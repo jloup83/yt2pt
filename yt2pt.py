@@ -383,35 +383,48 @@ def cmd_download(args):
     log_ok(f"Succeeded: {C.GREEN}{ok}{C.RESET}  |  Failed: {C.RED}{fail}{C.RESET}")
 
 
-def main():
-    parser = argparse.ArgumentParser(
-        prog="yt2pt",
-        description="yt2pt — Download YouTube videos with full metadata, subtitles, and channel info.",
+def print_help():
+    """Print custom colored help message."""
+    print(
+        f"\n{C.BOLD}yt2pt{C.RESET} — Download YouTube videos with full metadata, subtitles, "
+        f"and channel info. Ready to import in PeerTube.\n"
     )
-    parser.add_argument(
-        "--version", action="version", version=f"yt2pt {VERSION}"
-    )
+    print(f"{C.BOLD}{C.YELLOW}Usage:{C.RESET}")
+    print(f"  yt2pt <command> [options]\n")
+    print(f"{C.BOLD}{C.YELLOW}Commands:{C.RESET}")
+    print(f"  {C.GREEN}download{C.RESET}                     Download all videos listed in list.txt")
+    print(f"    {C.CYAN}--overwrite{C.RESET}                Re-download even if folder already exists\n")
+    print(f"{C.BOLD}{C.YELLOW}General Options:{C.RESET}")
+    print(f"  {C.GREEN}-h{C.RESET}, {C.GREEN}--help{C.RESET}                   Show help.")
+    print(f"  {C.GREEN}-v{C.RESET}, {C.GREEN}--version{C.RESET}                Show version and exit.\n")
 
+
+def main():
+    # Handle custom flags before argparse
+    if len(sys.argv) == 1 or sys.argv[1] in ("-h", "--help"):
+        print_help()
+        sys.exit(0)
+    if sys.argv[1] in ("-v", "--version"):
+        print(f"yt2pt {VERSION}")
+        sys.exit(0)
+
+    parser = argparse.ArgumentParser(prog="yt2pt", add_help=False)
     subparsers = parser.add_subparsers(dest="command")
 
-    dl = subparsers.add_parser(
-        "download",
-        help="Download all videos listed in list.txt",
-    )
-    dl.add_argument(
-        "--overwrite",
-        action="store_true",
-        default=False,
-        help="Re-download videos even if their folder already exists (default: skip)",
-    )
+    dl = subparsers.add_parser("download", add_help=False)
+    dl.add_argument("--overwrite", action="store_true", default=False)
+    dl.add_argument("-h", "--help", action="store_true", default=False)
 
     args = parser.parse_args()
 
     if args.command is None:
-        parser.print_help()
+        print_help()
         sys.exit(0)
 
     if args.command == "download":
+        if args.help:
+            print_help()
+            sys.exit(0)
         cmd_download(args)
 
 
