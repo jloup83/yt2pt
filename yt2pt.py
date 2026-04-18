@@ -12,7 +12,7 @@ import sys
 import urllib.request
 from pathlib import Path
 
-VERSION = "1.0.0"
+VERSION = "v2.0.0-beta"
 SCRIPT_DIR = Path(__file__).resolve().parent
 DOWNLOADS_DIR = SCRIPT_DIR / "downloads"
 LIST_FILE = SCRIPT_DIR / "list.txt"
@@ -409,7 +409,7 @@ def cmd_download(args):
 def print_help():
     """Print custom colored help message."""
     print(
-        f"\n{C.BOLD}yt2pt{C.RESET} — Download YouTube videos with full metadata, subtitles, "
+        f"\n{C.BOLD}yt2pt {C.GREEN}{VERSION}{C.RESET} — Download YouTube videos with full metadata, subtitles, "
         f"and channel info. Ready to import in PeerTube.\n"
     )
     print(f"{C.BOLD}{C.YELLOW}Usage:{C.RESET}")
