@@ -140,6 +140,13 @@ async function main(): Promise<void> {
     logger.info(`  log_dir:  ${paths.logDir}`);
     logger.info(`  bin_dir:  ${paths.binDir}`);
     logger.info(`  db:       ${paths.dataDir}/yt2pt.db`);
+    logger.info(
+      `  yt-dlp rate limit: ${
+        config.ytdlp.rate_limit_enabled
+          ? `enabled (${config.ytdlp.rate_limit})`
+          : "disabled"
+      }`
+    );
   } catch (err) {
     logger.error(`Failed to start server: ${err instanceof Error ? err.message : String(err)}`);
     process.exit(1);
