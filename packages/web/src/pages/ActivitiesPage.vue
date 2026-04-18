@@ -32,6 +32,11 @@ const channels = ref<ChannelSummary[]>([]);
 const loading = ref(true);
 const err = ref<string | null>(null);
 
+// Per-channel page navigation: each expanded channel shows CHANNEL_PAGE_SIZE
+// videos at a time with page buttons (1, 2, 3…) at the bottom.
+const CHANNEL_PAGE_SIZE = 100;
+const channelPage = reactive<Record<number, number>>({});
+
 const channelFilter = ref<string>("");
 const statusFilter = ref<Status[]>([]);
 const flashes = ref<Record<number, number>>({});
@@ -92,8 +97,8 @@ async function load(): Promise<void> {
     const params = new URLSearchParams();
     if (channelFilter.value) params.set("channel", channelFilter.value);
     if (statusFilter.value.length > 0) params.set("status", statusFilter.value.join(","));
-    // No pagination in the grouped view — load everything.
-    params.set("per_page", "500");
+    // Load all videos — per-channel pagination is handled in the template.
+    params.set("per_page", "100000");
     params.set("sort", "upload_date");
     params.set("order", "desc");
     const res = await endpoints.listVideos(params);
@@ -103,6 +108,24 @@ async function load(): Promise<void> {
   } finally {
     loading.value = false;
   }
+}
+
+function currentChannelPage(channelId: number): number {
+  return channelPage[channelId] ?? 1;
+}
+
+function channelPageCount(totalVideos: number): number {
+  return Math.max(1, Math.ceil(totalVideos / CHANNEL_PAGE_SIZE));
+}
+
+function pageVideos(videos: VideoRow[], channelId: number): VideoRow[] {
+  const page = currentChannelPage(channelId);
+  const start = (page - 1) * CHANNEL_PAGE_SIZE;
+  return videos.slice(start, start + CHANNEL_PAGE_SIZE);
+}
+
+function setChannelPage(channelId: number, page: number): void {
+  channelPage[channelId] = page;
 }
 
 async function loadChannels(): Promise<void> {
@@ -257,7 +280,8 @@ function onChannelFilterChange(): void {
 }
 
 function channelDisplayName(c: ChannelSummary): string {
-  return c.youtube_channel_name ?? c.youtube_channel_url;
+  const lang = (c.language ?? "fr").toUpperCase();
+  return `${c.youtube_channel_name ?? c.youtube_channel_url} [${lang}]`;
 }
 
 const summaryEntryOrder = STATUSES;
@@ -311,6 +335,38 @@ async function confirmDelete(): Promise<void> {
     deleteError.value = (e as Error).message;
   } finally {
     deleting.value = false;
+  }
+}
+
+// ── Retry flow ────────────────────────────────────────────────────
+const retrying = reactive<Record<number, boolean>>({});
+
+async function retryVideo(v: VideoRow): Promise<void> {
+  retrying[v.id] = true;
+  try {
+    const res = await endpoints.retryVideo(v.id);
+    // Update local state immediately so the UI reflects the change.
+    const idx = videos.value.findIndex((x) => x.id === v.id);
+    if (idx >= 0) {
+      videos.value = [
+        ...videos.value.slice(0, idx),
+        { ...videos.value[idx], status: res.new_status, progress_pct: 0, error_message: null },
+        ...videos.value.slice(idx + 1),
+      ];
+    }
+  } catch (e) {
+    // Surface the error briefly via the video's own error_message so
+    // the user sees feedback inline.
+    const idx = videos.value.findIndex((x) => x.id === v.id);
+    if (idx >= 0) {
+      videos.value = [
+        ...videos.value.slice(0, idx),
+        { ...videos.value[idx], error_message: `Retry failed: ${(e as Error).message}` },
+        ...videos.value.slice(idx + 1),
+      ];
+    }
+  } finally {
+    delete retrying[v.id];
   }
 }
 </script>
@@ -413,7 +469,7 @@ async function confirmDelete(): Promise<void> {
             </tr>
           </thead>
           <tbody>
-            <tr v-for="v in g.videos" :key="v.id" :class="rowClass(v)">
+            <tr v-for="v in pageVideos(g.videos, g.channel.id)" :key="v.id" :class="rowClass(v)">
               <td :title="v.title ?? ''">
                 <a :href="`https://www.youtube.com/watch?v=${v.youtube_video_id}`" target="_blank" rel="noopener">
                   {{ truncate(v.title) }}
@@ -445,6 +501,17 @@ async function confirmDelete(): Promise<void> {
               <td><small :title="v.updated_at">{{ relative(v.updated_at) }}</small></td>
               <td>
                 <button
+                  v-if="FAILED.has(v.status as Status)"
+                  type="button"
+                  class="outline row-retry"
+                  title="Retry this video"
+                  :disabled="retrying[v.id]"
+                  :aria-busy="retrying[v.id]"
+                  @click="retryVideo(v)"
+                >
+                  Retry
+                </button>
+                <button
                   type="button"
                   class="contrast outline row-delete"
                   title="Delete this video"
@@ -457,6 +524,17 @@ async function confirmDelete(): Promise<void> {
           </tbody>
         </table>
       </div>
+      <nav v-if="channelPageCount(g.videos.length) > 1" class="channel-pager">
+        <button
+          v-for="p in channelPageCount(g.videos.length)"
+          :key="p"
+          type="button"
+          :class="['outline', p === currentChannelPage(g.channel.id) ? 'primary' : 'secondary']"
+          @click="setChannelPage(g.channel.id, p)"
+        >
+          {{ p }}
+        </button>
+      </nav>
     </div>
   </article>
 
@@ -547,7 +625,7 @@ async function confirmDelete(): Promise<void> {
   flex: 1; justify-content: flex-end;
 }
 .toggle { margin: 0; width: auto; flex-shrink: 0; }
-.delete, .row-delete {
+.delete, .row-delete, .row-retry {
   margin: 0;
   width: auto;
   flex-shrink: 0;
@@ -609,4 +687,14 @@ progress { width: 8rem; height: 0.6rem; margin: 0; }
 .muted { opacity: 0.75; }
 .error { color: var(--pico-del-color, crimson); }
 .overflow-auto { overflow-x: auto; }
+.channel-pager {
+  display: flex; flex-wrap: wrap; gap: 0.25rem;
+  justify-content: center;
+  padding: 0.5rem 1rem;
+}
+.channel-pager button {
+  width: auto; min-width: 2.5rem;
+  margin: 0; padding: 0.25rem 0.6rem;
+  font-size: 0.85rem;
+}
 </style>

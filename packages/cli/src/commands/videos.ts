@@ -52,10 +52,11 @@ export async function runVideosAdd(
   client: ApiClient,
   ytUrl: string,
   ptId: string,
+  language?: string,
 ): Promise<number> {
   const res = await client.request<VideoAddResponse>("/api/videos", {
     method: "POST",
-    body: { youtube_url: ytUrl, peertube_channel_id: ptId },
+    body: { youtube_url: ytUrl, peertube_channel_id: ptId, language: language ?? "fr" },
   });
   if (isJsonMode()) {
     printJson(res);
@@ -117,6 +118,37 @@ export async function runVideosDelete(
   for (const w of res.warnings ?? []) {
     process.stdout.write(`  ${paint("!", "yellow")} ${w}\n`);
   }
+  return 0;
+}
+
+// ── videos retry ────────────────────────────────────────────────────
+
+interface VideoRetryResponse {
+  status: string;
+  video_id: number;
+  new_status: string;
+}
+
+export async function runVideosRetry(
+  client: ApiClient,
+  id: string,
+): Promise<number> {
+  const n = Number(id);
+  if (!Number.isInteger(n) || n <= 0) {
+    process.stderr.write(`Error: video id must be a positive integer\n`);
+    return 1;
+  }
+  const res = await client.request<VideoRetryResponse>(
+    `/api/videos/${n}/retry`,
+    { method: "POST" },
+  );
+  if (isJsonMode()) {
+    printJson(res);
+    return 0;
+  }
+  process.stdout.write(
+    `${paint("✓", "green")} Retrying video #${n} — ${res.new_status}\n`,
+  );
   return 0;
 }
 

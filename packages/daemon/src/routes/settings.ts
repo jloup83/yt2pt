@@ -216,9 +216,10 @@ export async function registerSettingsRoutes(app: FastifyInstance): Promise<void
     try {
       saveConfig(next, ctx.paths.configPath);
     } catch (err) {
-      ctx.logger.error(`Failed to save config: ${err instanceof Error ? err.message : String(err)}`);
+      const reason = err instanceof Error ? err.message : String(err);
+      ctx.logger.error(`Failed to save config: ${reason}`);
       reply.code(500);
-      return { error: "failed to write config" };
+      return { error: `failed to write config: ${reason}` };
     }
 
     // Mutate the in-process config object so everything pointing at it

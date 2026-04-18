@@ -61,6 +61,7 @@ export interface ChannelSummary {
   youtube_channel_url: string;
   youtube_channel_name: string | null;
   peertube_channel_id: string;
+  language: string;
   added_at: string;
   last_synced_at: string | null;
   video_count: number;
@@ -146,15 +147,16 @@ export const endpoints = {
   peertubeChannels: (refresh = false) =>
     api.get<PeertubeChannelList>(`/peertube/channels${refresh ? "?refresh=1" : ""}`),
   listChannels: () => api.get<{ channels: ChannelSummary[] }>("/channels"),
-  addChannel: (youtube_channel_url: string, peertube_channel_id: string) =>
-    api.post<ChannelSummary>("/channels", { youtube_channel_url, peertube_channel_id }),
-  addVideo: (youtube_url: string, peertube_channel_id: string) =>
+  addChannel: (youtube_channel_url: string, peertube_channel_id: string, language = "fr") =>
+    api.post<ChannelSummary>("/channels", { youtube_channel_url, peertube_channel_id, language }),
+  addVideo: (youtube_url: string, peertube_channel_id: string, language = "fr") =>
     api.post<{ status: string; video_id: number; channel_id: number }>(
-      "/videos", { youtube_url, peertube_channel_id },
+      "/videos", { youtube_url, peertube_channel_id, language },
     ),
   createPeertubeChannelFromYoutube: (
     youtube_url: string,
     overrides?: { name?: string; displayName?: string; description?: string; support?: string },
+    language = "fr",
   ) =>
     api.post<{
       mapping: { id: number; youtube_channel_url: string; peertube_channel_id: string };
@@ -163,10 +165,11 @@ export const endpoints = {
       warnings?: string[];
       already_mapped?: boolean;
       sync?: { status: "started" | "in_progress" | "rate_limited" | "unavailable" | "error"; retry_after_s?: number; error?: string };
-    }>("/peertube/channels/create-from-youtube", { youtube_url, overrides }),
+    }>("/peertube/channels/create-from-youtube", { youtube_url, overrides, language }),
   previewPeertubeChannelFromYoutube: (
     youtube_url: string,
     overrides?: { name?: string; displayName?: string; description?: string; support?: string },
+    language = "fr",
   ) =>
     api.post<{
       youtube_channel_url: string;
@@ -175,7 +178,7 @@ export const endpoints = {
       has_banner: boolean;
       already_mapped: boolean;
       existing_peertube_channel_id: string | null;
-    }>("/peertube/channels/preview-from-youtube", { youtube_url, overrides }),
+    }>("/peertube/channels/preview-from-youtube", { youtube_url, overrides, language }),
   deleteChannel: (id: number, fromPeertube = false) =>
     api.delete<{
       status?: string;
@@ -190,6 +193,12 @@ export const endpoints = {
       peertube_deleted: boolean | null;
       warnings: string[];
     }>(`/videos/${id}${fromPeertube ? "?from_peertube=true" : ""}`),
+  retryVideo: (id: number) =>
+    api.post<{
+      status: string;
+      video_id: number;
+      new_status: string;
+    }>(`/videos/${id}/retry`),
   syncChannel: (id: number) =>
     api.post<{ status: string; channel_id: number }>(`/channels/${id}/sync`),
   listVideos: (params: URLSearchParams = new URLSearchParams()): Promise<VideoListResponse> => {

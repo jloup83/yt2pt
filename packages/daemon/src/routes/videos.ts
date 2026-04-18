@@ -142,7 +142,7 @@ export async function registerVideoRoutes(app: FastifyInstance): Promise<void> {
 
     const page = q.page ? Math.max(1, Number(q.page) | 0) : 1;
     const perPageRaw = q.per_page ? Number(q.per_page) | 0 : 50;
-    const perPage = Math.max(1, Math.min(200, perPageRaw));
+    const perPage = Math.max(1, perPageRaw);
 
     const sort = SORT_COLUMNS.has(q.sort ?? "") ? (q.sort as "updated_at" | "created_at" | "title" | "upload_date") : "updated_at";
     const order = q.order === "asc" ? "asc" : "desc";
@@ -219,6 +219,7 @@ export async function registerVideoRoutes(app: FastifyInstance): Promise<void> {
     const body = (req.body ?? {}) as {
       youtube_url?: unknown;
       peertube_channel_id?: unknown;
+      language?: unknown;
     };
 
     const rawUrl = typeof body.youtube_url === "string" ? body.youtube_url : "";
@@ -228,6 +229,9 @@ export async function registerVideoRoutes(app: FastifyInstance): Promise<void> {
         : typeof body.peertube_channel_id === "number"
           ? String(body.peertube_channel_id)
           : "";
+    const language = typeof body.language === "string" && (body.language === "en" || body.language === "fr")
+      ? body.language
+      : "fr";
 
     if (!rawUrl || !ptId) {
       reply.code(400);
@@ -261,7 +265,7 @@ export async function registerVideoRoutes(app: FastifyInstance): Promise<void> {
     } else {
       try {
         const ytdlp = await findYtDlpBinary(ctx.paths.binDir);
-        resolver = makeDefaultVideoResolver(ytdlp, ctx.logger);
+        resolver = makeDefaultVideoResolver(ytdlp, ctx.logger, language);
       } catch (err) {
         ctx.logger.error(
           `yt-dlp binary unavailable: ${err instanceof Error ? err.message : String(err)}`
@@ -313,6 +317,7 @@ export async function registerVideoRoutes(app: FastifyInstance): Promise<void> {
         youtube_channel_url: canonicalChannelUrl,
         youtube_channel_name: meta.channel_name,
         peertube_channel_id: ptId,
+        language,
       });
     }
 
@@ -343,5 +348,43 @@ export async function registerVideoRoutes(app: FastifyInstance): Promise<void> {
       video_id: video.id,
       channel_id: channel.id,
     };
+  });
+
+  // ── POST /api/videos/:id/retry — retry a failed video ────────────
+  //
+  // Resets a *_FAILED video back to its corresponding *_QUEUED state
+  // and kicks the appropriate worker pool.
+  app.post("/api/videos/:id/retry", async (req, reply) => {
+    const id = Number((req.params as { id: string }).id);
+    if (!Number.isInteger(id) || id <= 0) {
+      reply.code(400);
+      return { error: "invalid id" };
+    }
+    const video = getVideoWithChannel(ctx.db, id);
+    if (!video) {
+      reply.code(404);
+      return { error: "not found" };
+    }
+
+    const RETRY_MAP: Record<string, { queued: VideoStatus; stage: "download" | "convert" | "upload" }> = {
+      DOWNLOAD_FAILED: { queued: "DOWNLOAD_QUEUED", stage: "download" },
+      CONVERT_FAILED:  { queued: "CONVERT_QUEUED",  stage: "convert" },
+      UPLOAD_FAILED:   { queued: "UPLOAD_QUEUED",   stage: "upload" },
+    };
+
+    const entry = RETRY_MAP[video.status];
+    if (!entry) {
+      reply.code(409);
+      return { error: `video is not in a failed state (current: ${video.status})` };
+    }
+
+    const now = new Date().toISOString();
+    ctx.db
+      .prepare("UPDATE videos SET status = ?, progress_pct = 0, error_message = NULL, updated_at = ? WHERE id = ?")
+      .run(entry.queued, now, id);
+
+    ctx.queue?.signal(entry.stage);
+
+    return { status: "retrying", video_id: id, new_status: entry.queued };
   });
 }

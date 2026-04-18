@@ -44,11 +44,13 @@ export function createProcessors(ctx: ProcessorContext): Processors {
   const download: JobProcessor = async (video, signal) => {
     const bin = await ytdlp();
     const url = youtubeUrl(video.youtube_video_id);
+    const channel = getChannelById(db, video.channel_id);
+    const lang = channel?.language || undefined;
     logger.info(`[download] video ${video.id}: starting (${video.youtube_video_id})`);
     const started = Date.now();
     const result = await runDownload(bin, url, config, paths, logger, signal, (pct) => {
       queue.reportProgress(video.id, pct);
-    });
+    }, lang);
     updateVideo(db, video.id, {
       folder_name: result.folderName,
       title: video.title ?? null,

@@ -5,6 +5,7 @@ export interface Channel {
   youtube_channel_url: string;
   youtube_channel_name: string | null;
   peertube_channel_id: string;
+  language: string;
   added_at: string;
   last_synced_at: string | null;
 }
@@ -13,18 +14,20 @@ export interface InsertChannelInput {
   youtube_channel_url: string;
   youtube_channel_name?: string | null;
   peertube_channel_id: string;
+  language?: string;
 }
 
 export function insertChannel(db: Database, input: InsertChannelInput): Channel {
   const now = new Date().toISOString();
   const stmt = db.prepare(
-    `INSERT INTO channels (youtube_channel_url, youtube_channel_name, peertube_channel_id, added_at)
-     VALUES (?, ?, ?, ?)`
+    `INSERT INTO channels (youtube_channel_url, youtube_channel_name, peertube_channel_id, language, added_at)
+     VALUES (?, ?, ?, ?, ?)`
   );
   const result = stmt.run(
     input.youtube_channel_url,
     input.youtube_channel_name ?? null,
     input.peertube_channel_id,
+    input.language ?? "fr",
     now
   );
   return getChannelById(db, Number(result.lastInsertRowid))!;

@@ -46,6 +46,8 @@ export interface SyncEngineOptions {
   ytdlpBinary: string | (() => Promise<string>);
   /** Data root (for channel_info/ side effects). Optional in tests. */
   dataDir?: string;
+  /** Path to a Netscape cookies.txt file for yt-dlp authentication. */
+  cookiesFile?: string;
   /** Minimum seconds between two syncs of the same channel. */
   rateLimitSeconds?: number;
   /** Override yt-dlp spawner (tests). */
@@ -166,6 +168,8 @@ export class SyncEngine extends EventEmitter<SyncEngineEvents> {
           dataDir: this.opts.dataDir,
           logger: this.opts.logger,
           signal,
+          cookiesFile: this.opts.cookiesFile,
+          language: channel.language || undefined,
         });
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
@@ -175,6 +179,8 @@ export class SyncEngine extends EventEmitter<SyncEngineEvents> {
 
     const spawner = this.opts.spawner ?? defaultSpawn;
     const syncArgs = [
+      ...(this.opts.cookiesFile ? ["--cookies", this.opts.cookiesFile] : []),
+      ...(channel.language ? ["--extractor-args", `youtube:lang=${channel.language}`] : []),
       "--flat-playlist",
       "--dump-json",
       "--no-warnings",

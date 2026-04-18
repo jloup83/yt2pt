@@ -83,11 +83,12 @@ function shellQuote(cmd: string, args: string[]): string {
  * Default implementation of `VideoResolver`: invokes yt-dlp with
  * `--dump-json --skip-download` to fetch metadata for a single video.
  */
-export function makeDefaultVideoResolver(ytdlp: string, log?: Logger): VideoResolver {
+export function makeDefaultVideoResolver(ytdlp: string, log?: Logger, language?: string): VideoResolver {
   return async (url) => {
+    const langArgs = language ? ["--extractor-args", `youtube:lang=${language}`] : [];
     const stdout = await execFileP(
       ytdlp,
-      ["--dump-json", "--skip-download", "--no-warnings", url],
+      [...langArgs, "--dump-json", "--skip-download", "--no-warnings", url],
       30_000,
       log,
     );

@@ -71,14 +71,17 @@ export async function resolveYoutubeChannelName(
   ytdlp: string,
   url: string,
   log?: Logger,
+  language?: string,
 ): Promise<string | null> {
   try {
-    const stdout = await execFileP(ytdlp, [
+    const args = [
+      ...(language ? ["--extractor-args", `youtube:lang=${language}`] : []),
       "--dump-single-json",
       "--flat-playlist",
       "--playlist-items", "0",
       url,
-    ], 30_000, log);
+    ];
+    const stdout = await execFileP(ytdlp, args, 30_000, log);
     const meta = JSON.parse(stdout) as { channel?: string; title?: string; uploader?: string };
     return meta.channel ?? meta.uploader ?? meta.title ?? null;
   } catch {
@@ -174,13 +177,16 @@ export async function registerChannelRoutes(app: FastifyInstance): Promise<void>
   });
 
   app.post("/api/channels", async (req, reply) => {
-    const body = req.body as { youtube_channel_url?: unknown; peertube_channel_id?: unknown } | undefined;
+    const body = req.body as { youtube_channel_url?: unknown; peertube_channel_id?: unknown; language?: unknown } | undefined;
     const rawUrl = typeof body?.youtube_channel_url === "string" ? body.youtube_channel_url : "";
     const peertubeId = typeof body?.peertube_channel_id === "string"
       ? body.peertube_channel_id
       : typeof body?.peertube_channel_id === "number"
         ? String(body.peertube_channel_id)
         : "";
+    const language = typeof body?.language === "string" && (body.language === "en" || body.language === "fr")
+      ? body.language
+      : "fr";
 
     if (!rawUrl || !peertubeId) {
       reply.code(400);
@@ -214,7 +220,7 @@ export async function registerChannelRoutes(app: FastifyInstance): Promise<void>
     let channelName: string | null = null;
     try {
       const ytdlp = await findYtDlpBinary(ctx.paths.binDir);
-      channelName = await resolveYoutubeChannelName(ytdlp, normalized, ctx.logger);
+      channelName = await resolveYoutubeChannelName(ytdlp, normalized, ctx.logger, language);
     } catch (err) {
       ctx.logger.debug(`yt-dlp channel name resolution skipped: ${err instanceof Error ? err.message : String(err)}`);
     }
@@ -223,6 +229,7 @@ export async function registerChannelRoutes(app: FastifyInstance): Promise<void>
       youtube_channel_url: normalized,
       youtube_channel_name: channelName,
       peertube_channel_id: peertubeId,
+      language,
     });
     reply.code(201);
     return summarizeChannel(ctx.db, row, ctx.paths.dataDir);
