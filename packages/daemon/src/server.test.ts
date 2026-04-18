@@ -37,13 +37,17 @@ function makeCtx() {
   return { config, paths, db, logger };
 }
 
-test("GET /api/health returns ok", async () => {
+test("GET /api/health returns ok with storage info", async () => {
   const ctx = makeCtx();
   const app = buildServer(ctx);
   const res = await app.inject({ method: "GET", url: "/api/health" });
   assert.equal(res.statusCode, 200);
   const body = res.json();
   assert.equal(body.status, "ok");
+  assert.ok(body.storage, "response should include storage");
+  assert.equal(typeof body.storage.disk_total_bytes, "number");
+  assert.equal(typeof body.storage.disk_free_bytes, "number");
+  assert.equal(typeof body.storage.data_dir_bytes, "number");
   await app.close();
   ctx.db.close();
 });

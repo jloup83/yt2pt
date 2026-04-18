@@ -6,8 +6,32 @@ import {
   type ChannelSummary,
   type PeertubeChannel,
   type PeertubeStatus,
+  type StorageInfo,
 } from "../api";
 import { useEvents } from "../composables/useEvents";
+
+// ── Storage info ──────────────────────────────────────────────────
+const storage = ref<StorageInfo | null>(null);
+
+function fmtBytes(b: number): string {
+  if (b < 1024) return `${b} B`;
+  if (b < 1024 * 1024) return `${(b / 1024).toFixed(1)} KB`;
+  if (b < 1024 * 1024 * 1024) return `${(b / (1024 * 1024)).toFixed(1)} MB`;
+  return `${(b / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+}
+
+function diskUsedPct(): string {
+  if (!storage.value || !storage.value.disk_total_bytes) return "—";
+  const used = storage.value.disk_total_bytes - storage.value.disk_free_bytes;
+  return `${((used / storage.value.disk_total_bytes) * 100).toFixed(1)}%`;
+}
+
+async function loadStorage(): Promise<void> {
+  try {
+    const res = await endpoints.health();
+    storage.value = res.storage;
+  } catch { /* swallow — non-critical */ }
+}
 
 // ── PeerTube status (SSE-driven, with an initial HTTP fetch) ──────
 const ptStatus = ref<PeertubeStatus | null>(null);
@@ -309,7 +333,7 @@ events.onSyncFailed((ev) => {
 });
 
 onMounted(async () => {
-  await Promise.all([primeStatus(), loadChannels(), loadPtChannels()]);
+  await Promise.all([primeStatus(), loadStorage(), loadChannels(), loadPtChannels()]);
 });
 </script>
 
@@ -318,6 +342,20 @@ onMounted(async () => {
     <h1>Home</h1>
     <p>PeerTube connection + mapped YouTube channels.</p>
   </hgroup>
+
+  <!-- ── Storage info ─────────────────────────────────────────── -->
+  <article v-if="storage">
+    <header><strong>Storage</strong></header>
+    <div class="status-bar">
+      <span>Disk capacity: <strong>{{ fmtBytes(storage.disk_total_bytes) }}</strong></span>
+      <span class="sep">·</span>
+      <span>Disk free: <strong>{{ fmtBytes(storage.disk_free_bytes) }}</strong></span>
+      <span class="sep">·</span>
+      <span>Disk used: <strong>{{ diskUsedPct() }}</strong></span>
+      <span class="sep">·</span>
+      <span>Data folder: <strong>{{ fmtBytes(storage.data_dir_bytes) }}</strong></span>
+    </div>
+  </article>
 
   <!-- ── PeerTube status bar ──────────────────────────────────── -->
   <article>

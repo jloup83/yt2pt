@@ -44,7 +44,12 @@ export const api = {
 
 // ── Typed endpoint helpers ──────────────────────────────────────────
 
-export interface HealthResponse { status: string; version: string }
+export interface StorageInfo {
+  disk_total_bytes: number;
+  disk_free_bytes: number;
+  data_dir_bytes: number;
+}
+export interface HealthResponse { status: string; version: string; storage: StorageInfo }
 export interface PeertubeStatus {
   online: boolean;
   authenticated: boolean;

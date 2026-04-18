@@ -64,15 +64,15 @@ function defaultsFor(mode: PathMode): Omit<ResolvedPaths, "mode"> {
         binDir: join(home, ".local", "share", "yt2pt", "bin"),
       };
     }
-    case "dev":
+    case "dev": {
+      const home = homedir();
       return {
         configPath: join(REPO_ROOT, "yt2pt.conf.toml"),
-        // Stable, separated dev-mode scratch paths so a zero-config run
-        // doesn't bleed state into the repo working tree.
-        dataDir: "/tmp/yt2ptd/data",
-        logDir: "/tmp/yt2ptd/logs",
+        dataDir: join(home, ".local", "share", "yt2pt"),
+        logDir: join(home, ".local", "share", "yt2pt", "logs"),
         binDir: join(REPO_ROOT, "bin"),
       };
+    }
   }
 }
 
