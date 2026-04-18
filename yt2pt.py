@@ -226,7 +226,7 @@ def pick_thumbnail(thumbnails, keyword):
     return hits[0].get("url")
 
 
-def process_video(binary, url, overwrite, channel_cache):
+def process_video(binary, url, channel_cache):
     """Download a single video with all associated assets."""
 
     # ── 1. Video metadata ────────────────────────────────────────────────────
@@ -248,12 +248,14 @@ def process_video(binary, url, overwrite, channel_cache):
     channel_dir  = video_dir / "channel"
 
     # ── 2. Skip / overwrite check ────────────────────────────────────────────
-    if video_dir.exists() and not overwrite:
-        log_warn(
-            f"Already exists: {C.CYAN}{folder_name}{C.RESET} "
-            f"— skipping (use {C.BOLD}--overwrite{C.RESET} to re-download)"
-        )
-        return True
+    if video_dir.exists():
+        answer = input(
+            f"  {C.YELLOW}?{C.RESET}  Already exists: {C.CYAN}{folder_name}{C.RESET}. "
+            f"Overwrite? [{C.DIM}y/N{C.RESET}] "
+        ).strip().lower()
+        if answer != "y":
+            log_info("Skipped")
+            return True
 
     log_header(f"{channel_name}  ·  {pub_date}  ·  {title}")
 
@@ -367,7 +369,7 @@ def cmd_download(args):
     for i, (lineno, url) in enumerate(urls, 1):
         log_info(f"[{i}/{len(urls)}] Line {lineno}: {C.CYAN}{url}{C.RESET}")
         try:
-            if process_video(binary, url, args.overwrite, channel_cache):
+            if process_video(binary, url, channel_cache):
                 ok += 1
             else:
                 fail += 1
@@ -392,8 +394,7 @@ def print_help():
     print(f"{C.BOLD}{C.YELLOW}Usage:{C.RESET}")
     print(f"  yt2pt <command> [options]\n")
     print(f"{C.BOLD}{C.YELLOW}Commands:{C.RESET}")
-    print(f"  {C.GREEN}download{C.RESET}                     Download all videos listed in list.txt")
-    print(f"    {C.CYAN}--overwrite{C.RESET}                Re-download even if folder already exists\n")
+    print(f"  {C.GREEN}download{C.RESET}                     Download all videos listed in list.txt\n")
     print(f"{C.BOLD}{C.YELLOW}General Options:{C.RESET}")
     print(f"  {C.GREEN}-h{C.RESET}, {C.GREEN}--help{C.RESET}                   Show help.")
     print(f"  {C.GREEN}-v{C.RESET}, {C.GREEN}--version{C.RESET}                Show version and exit.\n")
@@ -412,7 +413,6 @@ def main():
     subparsers = parser.add_subparsers(dest="command")
 
     dl = subparsers.add_parser("download", add_help=False)
-    dl.add_argument("--overwrite", action="store_true", default=False)
     dl.add_argument("-h", "--help", action="store_true", default=False)
 
     args = parser.parse_args()
