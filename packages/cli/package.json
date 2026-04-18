@@ -1,6 +1,6 @@
 {
   "name": "yt2pt",
-  "version": "1.0.0-beta",
+  "version": "1.0.0",
   "private": true,
   "description": "Command-line client for the yt2ptd daemon (YouTube → PeerTube migration)",
   "main": "dist/index.js",
