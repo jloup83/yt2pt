@@ -15,7 +15,7 @@ const DEFAULTS = {
   },
   http: { port: 8090, bind: "0.0.0.0" },
   workers: { download_concurrency: 1, convert_concurrency: 1, upload_concurrency: 1 },
-  ytdlp: { format: "bv*+ba/b", merge_output_format: "mkv", thumbnail_format: "jpg" },
+  ytdlp: { format: "bv*+ba/b", merge_output_format: "mkv", thumbnail_format: "jpg", rate_limit_enabled: true, rate_limit: "10M" },
   peertube: { instance_url: "https://peertube.example.com", channel_id: "", language: "en", licence: "" },
 } as const;
 
@@ -51,7 +51,7 @@ const form = reactive<Settings>({
   },
   http: { port: 8090, bind: "" },
   workers: { download_concurrency: 1, convert_concurrency: 1, upload_concurrency: 1 },
-  ytdlp: { format: "", merge_output_format: "mkv", thumbnail_format: "jpg" },
+  ytdlp: { format: "", merge_output_format: "mkv", thumbnail_format: "jpg", rate_limit_enabled: true, rate_limit: "10M" },
   peertube: {
     instance_url: "", api_token: "", channel_id: "",
     privacy: "public", language: "", licence: "",
@@ -286,6 +286,18 @@ async function onAcquireToken(): Promise<void> {
           <select v-model="form.ytdlp.thumbnail_format">
             <option v-for="f in THUMB_FORMATS" :key="f" :value="f">{{ f }}</option>
           </select>
+        </label>
+      </div>
+      <div class="grid">
+        <label>
+          rate_limit_enabled
+          <input type="checkbox" v-model="form.ytdlp.rate_limit_enabled" />
+        </label>
+        <label>
+          rate_limit
+          <input type="text" v-model="form.ytdlp.rate_limit"
+                 :placeholder="DEFAULTS.ytdlp.rate_limit"
+                 :disabled="!form.ytdlp.rate_limit_enabled" />
         </label>
       </div>
     </article>

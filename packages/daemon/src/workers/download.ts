@@ -80,10 +80,15 @@ export async function runDownload(
 
   checkAborted(signal);
 
+  const rateLimitArgs = config.ytdlp.rate_limit_enabled && config.ytdlp.rate_limit
+    ? ["--limit-rate", config.ytdlp.rate_limit]
+    : [];
+
   log.info(`Downloading video to ${outputDir}/...`);
   await run(ytdlp, [
     "-f", config.ytdlp.format,
     "--merge-output-format", config.ytdlp.merge_output_format,
+    ...rateLimitArgs,
     "-o", join(outputDir, videoFilename),
     url,
   ], signal, log);

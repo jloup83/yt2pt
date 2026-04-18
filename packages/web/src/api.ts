@@ -105,6 +105,8 @@ export interface YtdlpSection {
   format: string;
   merge_output_format: string;
   thumbnail_format: string;
+  rate_limit_enabled: boolean;
+  rate_limit: string;
 }
 export interface PeertubeSection {
   instance_url: string;
