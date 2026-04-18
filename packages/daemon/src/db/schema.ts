@@ -64,10 +64,15 @@ const SCHEMA_V3 = `
 ALTER TABLE videos ADD COLUMN peertube_video_uuid TEXT;
 `;
 
+const SCHEMA_V4 = `
+ALTER TABLE channels ADD COLUMN language TEXT NOT NULL DEFAULT 'fr';
+`;
+
 const MIGRATIONS: Migration[] = [
   { version: 1, up: SCHEMA_V1 },
   { version: 2, up: SCHEMA_V2 },
   { version: 3, up: SCHEMA_V3 },
+  { version: 4, up: SCHEMA_V4 },
 ];
 
 export function runMigrations(db: Database): void {

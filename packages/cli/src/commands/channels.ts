@@ -14,6 +14,7 @@ export interface ChannelSummary {
   youtube_channel_url: string;
   youtube_channel_name: string | null;
   peertube_channel_id: string;
+  language: string;
   added_at: string;
   last_synced_at: string | null;
   video_count: number;
@@ -40,10 +41,10 @@ export async function runChannelsList(client: ApiClient): Promise<number> {
   return 0;
 }
 
-export async function runChannelsAdd(client: ApiClient, ytUrl: string, ptId: string): Promise<number> {
+export async function runChannelsAdd(client: ApiClient, ytUrl: string, ptId: string, language?: string): Promise<number> {
   const ch = await client.request<ChannelSummary>("/api/channels", {
     method: "POST",
-    body: { youtube_channel_url: ytUrl, peertube_channel_id: ptId },
+    body: { youtube_channel_url: ytUrl, peertube_channel_id: ptId, language: language ?? "fr" },
   });
   if (isJsonMode()) {
     printJson(ch);
@@ -334,16 +335,18 @@ function formatChannels(channels: ChannelSummary[]): string {
   const nameW = Math.max(7,
     ...channels.map((c) => (c.youtube_channel_name ?? "—").length));
   const ptW = Math.max(10, ...channels.map((c) => c.peertube_channel_id.length));
+  const langW = 4; // "Lang" header
 
   const lines: string[] = [];
-  lines.push(`${padRight("ID", idW)}  ${padRight("YouTube", nameW)}  ${padRight("PeerTube", ptW)}  Videos`);
-  lines.push(`${"─".repeat(idW)}  ${"─".repeat(nameW)}  ${"─".repeat(ptW)}  ──────`);
+  lines.push(`${padRight("ID", idW)}  ${padRight("YouTube", nameW)}  ${padRight("Lang", langW)}  ${padRight("PeerTube", ptW)}  Videos`);
+  lines.push(`${"─".repeat(idW)}  ${"─".repeat(nameW)}  ${"─".repeat(langW)}  ${"─".repeat(ptW)}  ──────`);
   for (const c of channels) {
     const name = c.youtube_channel_name ?? "—";
+    const lang = (c.language ?? "fr").toUpperCase();
     const summary = Object.entries(c.status_summary)
       .map(([s, n]) => `${s}:${n}`).join(" ");
     lines.push(
-      `${padRight(String(c.id), idW)}  ${padRight(name, nameW)}  ${padRight(c.peertube_channel_id, ptW)}  ${c.video_count}${summary ? "  " + paint(summary, "gray") : ""}`,
+      `${padRight(String(c.id), idW)}  ${padRight(name, nameW)}  ${padRight(lang, langW)}  ${padRight(c.peertube_channel_id, ptW)}  ${c.video_count}${summary ? "  " + paint(summary, "gray") : ""}`,
     );
   }
   return lines.join("\n");

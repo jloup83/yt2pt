@@ -13,7 +13,7 @@ export interface ParsedArgs {
 }
 
 /** Flags that accept a value (either `--key value` or `--key=value`). */
-const VALUE_FLAGS = new Set(["daemon-url", "status", "channel", "page", "per-page"]);
+const VALUE_FLAGS = new Set(["daemon-url", "status", "channel", "page", "per-page", "language"]);
 
 /** Flags that are always boolean. Used only when the next token looks like a flag. */
 const BOOLEAN_FLAGS = new Set(["json", "help", "version", "no-watch"]);

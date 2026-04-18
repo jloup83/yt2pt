@@ -24,7 +24,7 @@ test("migrations are idempotent", () => {
   // running a second time must not throw or duplicate schema_version rows
   runMigrations(db);
   const rows = db.prepare("SELECT COUNT(*) as n FROM schema_version").get() as { n: number };
-  assert.equal(rows.n, 3);
+  assert.equal(rows.n, 4);
 });
 
 test("channels DAL: insert, lookup, list, update", () => {

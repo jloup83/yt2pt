@@ -169,6 +169,7 @@ export class SyncEngine extends EventEmitter<SyncEngineEvents> {
           logger: this.opts.logger,
           signal,
           cookiesFile: this.opts.cookiesFile,
+          language: channel.language || undefined,
         });
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
@@ -179,6 +180,7 @@ export class SyncEngine extends EventEmitter<SyncEngineEvents> {
     const spawner = this.opts.spawner ?? defaultSpawn;
     const syncArgs = [
       ...(this.opts.cookiesFile ? ["--cookies", this.opts.cookiesFile] : []),
+      ...(channel.language ? ["--extractor-args", `youtube:lang=${channel.language}`] : []),
       "--flat-playlist",
       "--dump-json",
       "--no-warnings",

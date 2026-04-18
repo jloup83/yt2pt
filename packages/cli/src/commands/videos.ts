@@ -52,10 +52,11 @@ export async function runVideosAdd(
   client: ApiClient,
   ytUrl: string,
   ptId: string,
+  language?: string,
 ): Promise<number> {
   const res = await client.request<VideoAddResponse>("/api/videos", {
     method: "POST",
-    body: { youtube_url: ytUrl, peertube_channel_id: ptId },
+    body: { youtube_url: ytUrl, peertube_channel_id: ptId, language: language ?? "fr" },
   });
   if (isJsonMode()) {
     printJson(res);

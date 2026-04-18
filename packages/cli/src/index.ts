@@ -129,7 +129,7 @@ async function dispatch(
             process.stderr.write(`Error: 'channels add' requires <yt-url> and <pt-id>\n`);
             return 1;
           }
-          return runChannelsAdd(client, subArgs[0], subArgs[1]);
+          return runChannelsAdd(client, subArgs[0], subArgs[1], typeof flags.language === "string" ? flags.language : undefined);
         case "remove":
         case "rm":
           if (subArgs.length !== 1) {
@@ -161,7 +161,7 @@ async function dispatch(
           process.stderr.write(`Error: 'videos add' requires <yt-url> and <pt-id>\n`);
           return 1;
         }
-        return runVideosAdd(client, subArgs[0], subArgs[1]);
+        return runVideosAdd(client, subArgs[0], subArgs[1], typeof flags.language === "string" ? flags.language : undefined);
       }
       if (rest.length > 0 && (rest[0] === "delete" || rest[0] === "rm")) {
         const subArgs = rest.slice(1);

@@ -76,6 +76,7 @@ async function loadChannels(): Promise<void> {
 // ── Add Channel form ──────────────────────────────────────────────
 const ytUrl = ref("");
 const selectedPtChannel = ref<string>("");
+const addLanguage = ref("fr");
 const ptChannels = ref<PeertubeChannel[]>([]);
 const ptChannelsLoading = ref(false);
 const ptChannelsError = ref<string | null>(null);
@@ -110,7 +111,7 @@ async function onAddChannel(): Promise<void> {
   }
   addBusy.value = true;
   try {
-    const created = await endpoints.addChannel(ytUrl.value.trim(), selectedPtChannel.value);
+    const created = await endpoints.addChannel(ytUrl.value.trim(), selectedPtChannel.value, addLanguage.value);
     // Immediately trigger a sync per spec; swallow non-fatal failures
     // (e.g. 429 rate limited) so the channel still appears in the list.
     try {
@@ -180,6 +181,7 @@ const canAdd = computed(
 // ── Add Video form (single-video sync) ────────────────────────────
 const ytVideoUrl = ref("");
 const selectedVideoPtChannel = ref<string>("");
+const addVideoLanguage = ref("fr");
 const addVideoBusy = ref(false);
 const addVideoStatus = ref<{ kind: "ok" | "err"; msg: string } | null>(null);
 
@@ -197,7 +199,7 @@ async function onAddVideo(): Promise<void> {
   }
   addVideoBusy.value = true;
   try {
-    const res = await endpoints.addVideo(ytVideoUrl.value.trim(), selectedVideoPtChannel.value);
+    const res = await endpoints.addVideo(ytVideoUrl.value.trim(), selectedVideoPtChannel.value, addVideoLanguage.value);
     addVideoStatus.value = {
       kind: "ok",
       msg: `Video #${res.video_id} queued (channel #${res.channel_id}).`,
@@ -225,6 +227,7 @@ type PtPayloadPreview = {
   support: string;
 };
 const createYtUrl = ref("");
+const createLanguage = ref("fr");
 const createPreview = ref<{
   payload: PtPayloadPreview;
   has_avatar: boolean;
@@ -247,7 +250,7 @@ async function onPreviewCreate(): Promise<void> {
   }
   createBusy.value = true;
   try {
-    const res = await endpoints.previewPeertubeChannelFromYoutube(createYtUrl.value.trim());
+    const res = await endpoints.previewPeertubeChannelFromYoutube(createYtUrl.value.trim(), undefined, createLanguage.value);
     createPreview.value = res;
     createOverrides.value = { ...res.payload };
     if (res.already_mapped) {
@@ -271,6 +274,7 @@ async function onConfirmCreate(): Promise<void> {
     const res = await endpoints.createPeertubeChannelFromYoutube(
       createYtUrl.value.trim(),
       createOverrides.value,
+      createLanguage.value,
     );
     const syncMsg = formatSyncStatus(res.sync);
     if (res.already_mapped) {
@@ -388,6 +392,7 @@ onMounted(async () => {
         <thead>
           <tr>
             <th>YouTube channel</th>
+            <th>Lang</th>
             <th>PeerTube channel</th>
             <th>Videos</th>
             <th>Status</th>
@@ -402,6 +407,7 @@ onMounted(async () => {
                 {{ c.youtube_channel_name ?? c.youtube_channel_url }}
               </a>
             </td>
+            <td>{{ (c.language ?? 'fr').toUpperCase() }}</td>
             <td><code>{{ c.peertube_channel_id }}</code></td>
             <td>{{ c.video_count }}</td>
             <td>
@@ -465,6 +471,13 @@ onMounted(async () => {
         </select>
         <small v-if="ptChannelsError" class="error">{{ ptChannelsError }}</small>
       </label>
+      <label>
+        Language
+        <select v-model="addLanguage" :disabled="addBusy">
+          <option value="fr">French</option>
+          <option value="en">English</option>
+        </select>
+      </label>
       <div class="row">
         <button type="submit" :aria-busy="addBusy" :disabled="!canAdd">Sync channel</button>
         <button type="button" class="secondary outline" :disabled="ptChannelsLoading" @click="loadPtChannels">
@@ -501,6 +514,13 @@ onMounted(async () => {
           </option>
         </select>
       </label>
+      <label>
+        Language
+        <select v-model="addVideoLanguage" :disabled="addVideoBusy">
+          <option value="fr">French</option>
+          <option value="en">English</option>
+        </select>
+      </label>
       <div class="row">
         <button type="submit" :aria-busy="addVideoBusy" :disabled="!canAddVideo">Sync video</button>
         <span v-if="addVideoStatus" :class="addVideoStatus.kind === 'ok' ? 'ok' : 'error'">{{ addVideoStatus.msg }}</span>
@@ -524,6 +544,13 @@ onMounted(async () => {
           placeholder="https://www.youtube.com/@SomeChannel"
           :disabled="createBusy"
         />
+      </label>
+      <label>
+        Language
+        <select v-model="createLanguage" :disabled="createBusy">
+          <option value="fr">French</option>
+          <option value="en">English</option>
+        </select>
       </label>
       <div class="row">
         <button type="submit" :aria-busy="createBusy" :disabled="createBusy || !createYtUrl.trim()">

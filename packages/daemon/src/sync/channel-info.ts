@@ -26,6 +26,8 @@ export interface FetchChannelInfoOptions {
   signal?: AbortSignal;
   /** Path to a Netscape cookies.txt file for yt-dlp authentication. */
   cookiesFile?: string;
+  /** YouTube content language (e.g. "fr", "en"). */
+  language?: string;
   /** Override yt-dlp invocation (tests). Returns stdout. */
   runYtdlp?: (binary: string, args: string[], signal?: AbortSignal) => Promise<string>;
   /** Override image downloader (tests). */
@@ -67,6 +69,7 @@ export async function fetchChannelInfo(opts: FetchChannelInfoOptions): Promise<C
 
   const ytArgs = [
     ...(opts.cookiesFile ? ["--cookies", opts.cookiesFile] : []),
+    ...(opts.language ? ["--extractor-args", `youtube:lang=${opts.language}`] : []),
     "--dump-single-json",
     "--flat-playlist",
     "--playlist-items", "0",

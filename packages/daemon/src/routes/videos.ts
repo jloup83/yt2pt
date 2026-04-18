@@ -219,6 +219,7 @@ export async function registerVideoRoutes(app: FastifyInstance): Promise<void> {
     const body = (req.body ?? {}) as {
       youtube_url?: unknown;
       peertube_channel_id?: unknown;
+      language?: unknown;
     };
 
     const rawUrl = typeof body.youtube_url === "string" ? body.youtube_url : "";
@@ -228,6 +229,9 @@ export async function registerVideoRoutes(app: FastifyInstance): Promise<void> {
         : typeof body.peertube_channel_id === "number"
           ? String(body.peertube_channel_id)
           : "";
+    const language = typeof body.language === "string" && (body.language === "en" || body.language === "fr")
+      ? body.language
+      : "fr";
 
     if (!rawUrl || !ptId) {
       reply.code(400);
@@ -261,7 +265,7 @@ export async function registerVideoRoutes(app: FastifyInstance): Promise<void> {
     } else {
       try {
         const ytdlp = await findYtDlpBinary(ctx.paths.binDir);
-        resolver = makeDefaultVideoResolver(ytdlp, ctx.logger);
+        resolver = makeDefaultVideoResolver(ytdlp, ctx.logger, language);
       } catch (err) {
         ctx.logger.error(
           `yt-dlp binary unavailable: ${err instanceof Error ? err.message : String(err)}`
@@ -313,6 +317,7 @@ export async function registerVideoRoutes(app: FastifyInstance): Promise<void> {
         youtube_channel_url: canonicalChannelUrl,
         youtube_channel_name: meta.channel_name,
         peertube_channel_id: ptId,
+        language,
       });
     }
 

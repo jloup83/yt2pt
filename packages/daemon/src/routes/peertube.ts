@@ -105,7 +105,7 @@ export async function registerPeertubeRoutes(app: FastifyInstance): Promise<void
   // without contacting PeerTube and without recording a mapping. Used
   // by the Web UI to show a confirmation preview.
   app.post("/api/peertube/channels/preview-from-youtube", async (req, reply) => {
-    const body = (req.body ?? {}) as { youtube_url?: unknown; overrides?: unknown };
+    const body = (req.body ?? {}) as { youtube_url?: unknown; overrides?: unknown; language?: unknown };
     const rawUrl = typeof body.youtube_url === "string" ? body.youtube_url : "";
     const normalized = normalizeYoutubeChannelUrl(rawUrl);
     if (!normalized) {
@@ -113,6 +113,9 @@ export async function registerPeertubeRoutes(app: FastifyInstance): Promise<void
       return { error: "invalid YouTube channel URL" };
     }
     const overrides = sanitizeOverrides(body.overrides);
+    const language = typeof body.language === "string" && (body.language === "en" || body.language === "fr")
+      ? body.language
+      : "fr";
 
     const fetchInfo = ctx.channelInfoFetcher ?? defaultFetchChannelInfo;
     let ytdlp = "";
@@ -135,6 +138,7 @@ export async function registerPeertubeRoutes(app: FastifyInstance): Promise<void
         channelUrl: normalized,
         dataDir: ctx.paths.dataDir,
         logger: ctx.logger,
+        language,
       });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -186,6 +190,7 @@ export async function registerPeertubeRoutes(app: FastifyInstance): Promise<void
     const body = (req.body ?? {}) as {
       youtube_url?: unknown;
       overrides?: unknown;
+      language?: unknown;
     };
     const rawUrl = typeof body.youtube_url === "string" ? body.youtube_url : "";
     const normalized = normalizeYoutubeChannelUrl(rawUrl);
@@ -194,6 +199,9 @@ export async function registerPeertubeRoutes(app: FastifyInstance): Promise<void
       return { error: "invalid YouTube channel URL" };
     }
     const overrides = sanitizeOverrides(body.overrides);
+    const language = typeof body.language === "string" && (body.language === "en" || body.language === "fr")
+      ? body.language
+      : "fr";
 
     // If a mapping already exists, the PT channel was created previously.
     // Skip creation and just kick off a sync so missing videos start
@@ -243,6 +251,7 @@ export async function registerPeertubeRoutes(app: FastifyInstance): Promise<void
         channelUrl: normalized,
         dataDir: ctx.paths.dataDir,
         logger: ctx.logger,
+        language,
       });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -284,6 +293,7 @@ export async function registerPeertubeRoutes(app: FastifyInstance): Promise<void
       youtube_channel_name:
         (typeof overrides.displayName === "string" && overrides.displayName) || null,
       peertube_channel_id: String(result.created.id),
+      language,
     });
 
     ctx.logger.info(

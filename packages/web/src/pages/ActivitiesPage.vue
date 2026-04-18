@@ -280,7 +280,8 @@ function onChannelFilterChange(): void {
 }
 
 function channelDisplayName(c: ChannelSummary): string {
-  return c.youtube_channel_name ?? c.youtube_channel_url;
+  const lang = (c.language ?? "fr").toUpperCase();
+  return `${c.youtube_channel_name ?? c.youtube_channel_url} [${lang}]`;
 }
 
 const summaryEntryOrder = STATUSES;
