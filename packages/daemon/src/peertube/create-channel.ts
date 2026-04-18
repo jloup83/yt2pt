@@ -175,15 +175,20 @@ export async function createPeertubeChannel(
   pt: PeertubeConnection,
   payload: PeertubeChannelPayload,
 ): Promise<CreatedPeertubeChannel> {
+  // PeerTube's video-channels endpoint rejects empty `description` /
+  // `support` fields with 400 "Invalid value", so omit them when empty
+  // rather than sending "".
+  const reqBody: Record<string, string> = {
+    name: payload.name,
+    displayName: payload.displayName,
+  };
+  if (payload.description.trim().length > 0) reqBody["description"] = payload.description;
+  if (payload.support.trim().length > 0) reqBody["support"] = payload.support;
+
   const res = await pt.authFetch("/video-channels", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      name: payload.name,
-      displayName: payload.displayName,
-      description: payload.description,
-      support: payload.support,
-    }),
+    body: JSON.stringify(reqBody),
   });
   const body: unknown = await res.json().catch(() => null);
   if (!res.ok) {
