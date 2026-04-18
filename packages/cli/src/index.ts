@@ -12,7 +12,7 @@ import {
   runChannelsRemove,
   runChannelsSync,
 } from "./commands/channels";
-import { runVideosAdd, runVideosDelete, runVideosList } from "./commands/videos";
+import { runVideosAdd, runVideosDelete, runVideosList, runVideosRetry } from "./commands/videos";
 import { setJsonMode, paint } from "./output/format";
 
 const { version: VERSION } = JSON.parse(
@@ -35,6 +35,7 @@ Usage:
   yt2pt videos --channel=<id>           Filter by channel
   yt2pt videos add <yt-url> <pt-id>     Queue a single video for sync
   yt2pt videos delete <id>              Delete a tracked video + local files
+  yt2pt videos retry <id>              Retry a failed video
   yt2pt help                            Show this help
   yt2pt version                         Show version
 
@@ -172,6 +173,14 @@ async function dispatch(
           fromPeertube: flags["from-peertube"] === true,
           yes: flags.yes === true || flags.y === true,
         });
+      }
+      if (rest.length > 0 && rest[0] === "retry") {
+        const subArgs = rest.slice(1);
+        if (subArgs.length !== 1) {
+          process.stderr.write(`Error: 'videos retry' requires <id>\n`);
+          return 1;
+        }
+        return runVideosRetry(client, subArgs[0]);
       }
       return runVideosList(client, {
         status: typeof flags.status === "string" ? (flags.status as string) : undefined,

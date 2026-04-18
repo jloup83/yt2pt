@@ -24,6 +24,8 @@ export interface FetchChannelInfoOptions {
   dataDir: string;
   logger: Logger;
   signal?: AbortSignal;
+  /** Path to a Netscape cookies.txt file for yt-dlp authentication. */
+  cookiesFile?: string;
   /** Override yt-dlp invocation (tests). Returns stdout. */
   runYtdlp?: (binary: string, args: string[], signal?: AbortSignal) => Promise<string>;
   /** Override image downloader (tests). */
@@ -64,6 +66,7 @@ export async function fetchChannelInfo(opts: FetchChannelInfoOptions): Promise<C
   opts.logger.info(`Fetching channel info: ${opts.channelUrl}`);
 
   const ytArgs = [
+    ...(opts.cookiesFile ? ["--cookies", opts.cookiesFile] : []),
     "--dump-single-json",
     "--flat-playlist",
     "--playlist-items", "0",

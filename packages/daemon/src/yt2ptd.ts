@@ -62,6 +62,7 @@ async function main(): Promise<void> {
     queue,
     ytdlpBinary: () => findYtDlpBinary(paths.binDir),
     dataDir: paths.dataDir,
+    cookiesFile: config.ytdlp.cookies_file || undefined,
   });
 
   const webRoot = process.env.YT2PT_WEB_ROOT

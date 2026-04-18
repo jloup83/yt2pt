@@ -336,6 +336,38 @@ async function confirmDelete(): Promise<void> {
     deleting.value = false;
   }
 }
+
+// ── Retry flow ────────────────────────────────────────────────────
+const retrying = reactive<Record<number, boolean>>({});
+
+async function retryVideo(v: VideoRow): Promise<void> {
+  retrying[v.id] = true;
+  try {
+    const res = await endpoints.retryVideo(v.id);
+    // Update local state immediately so the UI reflects the change.
+    const idx = videos.value.findIndex((x) => x.id === v.id);
+    if (idx >= 0) {
+      videos.value = [
+        ...videos.value.slice(0, idx),
+        { ...videos.value[idx], status: res.new_status, progress_pct: 0, error_message: null },
+        ...videos.value.slice(idx + 1),
+      ];
+    }
+  } catch (e) {
+    // Surface the error briefly via the video's own error_message so
+    // the user sees feedback inline.
+    const idx = videos.value.findIndex((x) => x.id === v.id);
+    if (idx >= 0) {
+      videos.value = [
+        ...videos.value.slice(0, idx),
+        { ...videos.value[idx], error_message: `Retry failed: ${(e as Error).message}` },
+        ...videos.value.slice(idx + 1),
+      ];
+    }
+  } finally {
+    delete retrying[v.id];
+  }
+}
 </script>
 
 <template>
@@ -468,6 +500,17 @@ async function confirmDelete(): Promise<void> {
               <td><small :title="v.updated_at">{{ relative(v.updated_at) }}</small></td>
               <td>
                 <button
+                  v-if="FAILED.has(v.status as Status)"
+                  type="button"
+                  class="outline row-retry"
+                  title="Retry this video"
+                  :disabled="retrying[v.id]"
+                  :aria-busy="retrying[v.id]"
+                  @click="retryVideo(v)"
+                >
+                  Retry
+                </button>
+                <button
                   type="button"
                   class="contrast outline row-delete"
                   title="Delete this video"
@@ -581,7 +624,7 @@ async function confirmDelete(): Promise<void> {
   flex: 1; justify-content: flex-end;
 }
 .toggle { margin: 0; width: auto; flex-shrink: 0; }
-.delete, .row-delete {
+.delete, .row-delete, .row-retry {
   margin: 0;
   width: auto;
   flex-shrink: 0;

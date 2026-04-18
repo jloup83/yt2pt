@@ -344,4 +344,42 @@ export async function registerVideoRoutes(app: FastifyInstance): Promise<void> {
       channel_id: channel.id,
     };
   });
+
+  // ── POST /api/videos/:id/retry — retry a failed video ────────────
+  //
+  // Resets a *_FAILED video back to its corresponding *_QUEUED state
+  // and kicks the appropriate worker pool.
+  app.post("/api/videos/:id/retry", async (req, reply) => {
+    const id = Number((req.params as { id: string }).id);
+    if (!Number.isInteger(id) || id <= 0) {
+      reply.code(400);
+      return { error: "invalid id" };
+    }
+    const video = getVideoWithChannel(ctx.db, id);
+    if (!video) {
+      reply.code(404);
+      return { error: "not found" };
+    }
+
+    const RETRY_MAP: Record<string, { queued: VideoStatus; stage: "download" | "convert" | "upload" }> = {
+      DOWNLOAD_FAILED: { queued: "DOWNLOAD_QUEUED", stage: "download" },
+      CONVERT_FAILED:  { queued: "CONVERT_QUEUED",  stage: "convert" },
+      UPLOAD_FAILED:   { queued: "UPLOAD_QUEUED",   stage: "upload" },
+    };
+
+    const entry = RETRY_MAP[video.status];
+    if (!entry) {
+      reply.code(409);
+      return { error: `video is not in a failed state (current: ${video.status})` };
+    }
+
+    const now = new Date().toISOString();
+    ctx.db
+      .prepare("UPDATE videos SET status = ?, progress_pct = 0, error_message = NULL, updated_at = ? WHERE id = ?")
+      .run(entry.queued, now, id);
+
+    ctx.queue?.signal(entry.stage);
+
+    return { status: "retrying", video_id: id, new_status: entry.queued };
+  });
 }

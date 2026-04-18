@@ -190,6 +190,12 @@ export const endpoints = {
       peertube_deleted: boolean | null;
       warnings: string[];
     }>(`/videos/${id}${fromPeertube ? "?from_peertube=true" : ""}`),
+  retryVideo: (id: number) =>
+    api.post<{
+      status: string;
+      video_id: number;
+      new_status: string;
+    }>(`/videos/${id}/retry`),
   syncChannel: (id: number) =>
     api.post<{ status: string; channel_id: number }>(`/channels/${id}/sync`),
   listVideos: (params: URLSearchParams = new URLSearchParams()): Promise<VideoListResponse> => {

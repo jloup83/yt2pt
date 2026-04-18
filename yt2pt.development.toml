@@ -29,6 +29,7 @@ merge_output_format = "mkv"
 thumbnail_format = "jpg"
 rate_limit_enabled = true
 rate_limit = "10M"
+cookies_file = ""
 
 [peertube]
 instance_url = ""

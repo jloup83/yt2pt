@@ -60,8 +60,10 @@ export async function runDownload(
 ): Promise<DownloadResult> {
   checkAborted(signal);
 
+  const cookiesArgs = config.ytdlp.cookies_file ? ["--cookies", config.ytdlp.cookies_file] : [];
+
   log.info("Fetching video metadata...");
-  const { stdout } = await run(ytdlp, ["--dump-json", "--skip-download", url], signal, log);
+  const { stdout } = await run(ytdlp, [...cookiesArgs, "--dump-json", "--skip-download", url], signal, log);
   const rawMeta = JSON.parse(stdout) as Record<string, unknown>;
   onProgress?.(10);
 
@@ -86,6 +88,7 @@ export async function runDownload(
 
   log.info(`Downloading video to ${outputDir}/...`);
   await run(ytdlp, [
+    ...cookiesArgs,
     "-f", config.ytdlp.format,
     "--merge-output-format", config.ytdlp.merge_output_format,
     ...rateLimitArgs,
@@ -106,6 +109,7 @@ export async function runDownload(
   log.info("Downloading thumbnail...");
   try {
     await run(ytdlp, [
+      ...cookiesArgs,
       "--skip-download", "--write-thumbnail",
       "--convert-thumbnails", config.ytdlp.thumbnail_format,
       "-o", join(outputDir, "thumbnail"),
@@ -127,6 +131,7 @@ export async function runDownload(
     const subtitlesDir = join(outputDir, "subtitles");
     await mkdir(subtitlesDir, { recursive: true });
     await run(ytdlp, [
+      ...cookiesArgs,
       "--skip-download", "--write-subs",
       "--sub-format", "vtt",
       "-o", join(subtitlesDir, "%(id)s"),

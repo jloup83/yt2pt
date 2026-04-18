@@ -36,6 +36,7 @@ interface YtdlpConfig {
   thumbnail_format: string;
   rate_limit_enabled: boolean;
   rate_limit: string;
+  cookies_file: string;
 }
 
 interface PeertubeConfig {
@@ -85,6 +86,7 @@ const DEFAULTS: Config = {
     thumbnail_format: "jpg",
     rate_limit_enabled: true,
     rate_limit: "10M",
+    cookies_file: "",
   },
   peertube: {
     instance_url: "",

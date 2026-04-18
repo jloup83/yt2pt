@@ -33,6 +33,10 @@ thumbnail_format = "jpg"
 # Set rate_limit_enabled = false to disable the cap entirely.
 rate_limit_enabled = true
 rate_limit = "10M"
+# Path to a Netscape cookies.txt file for YouTube authentication.
+# Needed when YouTube rate-limits or requires sign-in. Leave empty to disable.
+# Export with: yt-dlp --cookies-from-browser firefox --cookies cookies.txt ...
+cookies_file = ""
 
 [peertube]
 instance_url = ""
