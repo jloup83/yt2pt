@@ -146,14 +146,15 @@ test("POST /api/channels inserts, normalizes the URL, returns the summary", asyn
   ctx.cleanup();
 });
 
-test("POST /api/channels is idempotent — second call on same URL returns 409", async () => {
+test("POST /api/channels is idempotent — second call on same URL returns existing mapping", async () => {
   const ctx = makeCtx();
   const app = buildServer(ctx);
   const payload = { youtube_channel_url: "https://www.youtube.com/@foo", peertube_channel_id: "5" };
   const r1 = await app.inject({ method: "POST", url: "/api/channels", payload });
   assert.equal(r1.statusCode, 201);
   const r2 = await app.inject({ method: "POST", url: "/api/channels", payload });
-  assert.equal(r2.statusCode, 409);
+  assert.equal(r2.statusCode, 200);
+  assert.equal(r2.json().id, r1.json().id);
   await app.close();
   ctx.cleanup();
 });

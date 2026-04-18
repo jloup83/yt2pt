@@ -193,9 +193,20 @@ export async function registerChannelRoutes(app: FastifyInstance): Promise<void>
       return { error: "invalid YouTube channel URL" };
     }
 
-    if (getChannelByUrl(ctx.db, normalized)) {
-      reply.code(409);
-      return { error: "channel already mapped" };
+    const existing = getChannelByUrl(ctx.db, normalized);
+    if (existing) {
+      ctx.logger.info(
+        `POST /api/channels: channel already mapped, triggering sync ` +
+          `(youtube_url=${normalized}, mapping_id=${existing.id}, ` +
+          `peertube_channel_id=${existing.peertube_channel_id})`,
+      );
+      // Kick off a sync so missing videos start flowing.
+      if (ctx.sync) {
+        try {
+          ctx.sync.trigger(existing.id);
+        } catch { /* swallow — sync engine logs its own errors */ }
+      }
+      return summarizeChannel(ctx.db, existing, ctx.paths.dataDir);
     }
 
     // Best-effort name resolution via yt-dlp; not a hard failure if yt-dlp

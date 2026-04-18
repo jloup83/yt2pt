@@ -228,8 +228,8 @@ async function onPreviewCreate(): Promise<void> {
     createOverrides.value = { ...res.payload };
     if (res.already_mapped) {
       createStatus.value = {
-        kind: "err",
-        msg: `This YouTube channel is already mapped to PeerTube channel #${res.existing_peertube_channel_id}.`,
+        kind: "ok",
+        msg: `This YouTube channel is already mapped to PeerTube channel #${res.existing_peertube_channel_id}. Click Confirm to start syncing missing videos.`,
       };
     }
   } catch (err) {
@@ -248,11 +248,21 @@ async function onConfirmCreate(): Promise<void> {
       createYtUrl.value.trim(),
       createOverrides.value,
     );
-    const warn = res.warnings.length > 0 ? ` (warnings: ${res.warnings.join("; ")})` : "";
-    createStatus.value = {
-      kind: "ok",
-      msg: `Created PeerTube channel ${res.peertube_channel.name} (#${res.peertube_channel.id})${warn}`,
-    };
+    const syncMsg = formatSyncStatus(res.sync);
+    if (res.already_mapped) {
+      createStatus.value = {
+        kind: "ok",
+        msg: `Channel already exists on PeerTube (#${res.mapping.peertube_channel_id}); ${syncMsg}.`,
+      };
+    } else {
+      const warn = res.warnings && res.warnings.length > 0 ? ` (warnings: ${res.warnings.join("; ")})` : "";
+      const ptName = res.peertube_channel?.name ?? "(unknown)";
+      const ptId = res.peertube_channel?.id ?? "?";
+      createStatus.value = {
+        kind: "ok",
+        msg: `Created PeerTube channel ${ptName} (#${ptId})${warn}; ${syncMsg}.`,
+      };
+    }
     createPreview.value = null;
     createYtUrl.value = "";
     await Promise.all([loadChannels(), loadPtChannels()]);
@@ -274,6 +284,21 @@ async function onConfirmCreate(): Promise<void> {
 function onCancelCreate(): void {
   createPreview.value = null;
   createStatus.value = null;
+}
+
+function formatSyncStatus(
+  sync: { status: string; retry_after_s?: number; error?: string } | undefined,
+): string {
+  if (!sync) return "sync not started";
+  switch (sync.status) {
+    case "started": return "sync started";
+    case "in_progress": return "sync already in progress";
+    case "rate_limited":
+      return `sync rate-limited (retry in ${sync.retry_after_s ?? "?"}s)`;
+    case "unavailable": return "sync engine unavailable";
+    case "error": return `sync trigger failed: ${sync.error ?? "unknown error"}`;
+    default: return `sync status: ${sync.status}`;
+  }
 }
 
 // Refresh the channels list whenever a sync finishes on any channel.
@@ -497,8 +522,8 @@ onMounted(async () => {
       </p>
       <div class="row">
         <button type="submit" :aria-busy="createBusy"
-          :disabled="createBusy || !createOverrides.name.trim() || createPreview.already_mapped">
-          Create PeerTube channel
+          :disabled="createBusy || !createOverrides.name.trim()">
+          {{ createPreview.already_mapped ? "Sync existing channel" : "Create PeerTube channel" }}
         </button>
         <button type="button" class="secondary outline" :disabled="createBusy" @click="onCancelCreate">
           Cancel

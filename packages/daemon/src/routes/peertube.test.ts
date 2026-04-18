@@ -394,7 +394,7 @@ test("POST /api/peertube/channels/create-from-youtube returns 409 on PT slug con
   ctx.cleanup();
 });
 
-test("POST /api/peertube/channels/create-from-youtube refuses duplicate yt2pt mapping", async () => {
+test("POST /api/peertube/channels/create-from-youtube is idempotent for existing mapping", async () => {
   const config = makeConfig();
   const logger = { error: () => {}, warn: () => {}, info: () => {}, debug: () => {} } as unknown as Logger;
   const conn = makeFakePeertube(config, logger, async () => new Response("", { status: 200 }));
@@ -412,8 +412,12 @@ test("POST /api/peertube/channels/create-from-youtube refuses duplicate yt2pt ma
     method: "POST", url: "/api/peertube/channels/create-from-youtube",
     payload: { youtube_url: "https://www.youtube.com/@foo" },
   });
-  assert.equal(res.statusCode, 409);
-  assert.equal(res.json().peertube_channel_id, "7");
+  assert.equal(res.statusCode, 200);
+  const body = res.json();
+  assert.equal(body.already_mapped, true);
+  assert.equal(body.mapping.peertube_channel_id, "7");
+  // Sync engine isn't wired in this test ctx → returns "unavailable".
+  assert.equal(body.sync.status, "unavailable");
   await app.close();
   ctx.cleanup();
 });
