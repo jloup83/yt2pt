@@ -5,6 +5,7 @@ import argparse
 import json
 import os
 import platform
+import shutil
 import ssl
 import subprocess
 import sys
@@ -248,14 +249,30 @@ def process_video(binary, url, channel_cache):
     channel_dir  = video_dir / "channel"
 
     # ── 2. Skip / overwrite check ────────────────────────────────────────────
+    complete_marker = video_dir / "COMPLETE"
     if video_dir.exists():
-        answer = input(
-            f"  {C.YELLOW}?{C.RESET}  Already exists: {C.CYAN}{folder_name}{C.RESET}. "
-            f"Overwrite? [{C.DIM}y/N{C.RESET}] "
-        ).strip().lower()
-        if answer != "y":
-            log_info("Skipped")
-            return True
+        if complete_marker.exists():
+            # Completed download — default to skip
+            answer = input(
+                f"  {C.YELLOW}?{C.RESET}  Completed download exists: {C.CYAN}{folder_name}{C.RESET}. "
+                f"Overwrite? [{C.DIM}y/N{C.RESET}] "
+            ).strip().lower()
+            if answer != "y":
+                log_info("Skipped")
+                return True
+        else:
+            # Incomplete download — default to overwrite
+            answer = input(
+                f"  {C.YELLOW}?{C.RESET}  Incomplete download found: {C.CYAN}{folder_name}{C.RESET}. "
+                f"Overwrite? [{C.DIM}Y/n{C.RESET}] "
+            ).strip().lower()
+            if answer == "n":
+                log_info("Skipped")
+                return True
+
+        # Remove folder to start fresh
+        log_info(f"Removing {C.CYAN}{folder_name}{C.RESET} for fresh download")
+        shutil.rmtree(video_dir)
 
     log_header(f"{channel_name}  ·  {pub_date}  ·  {title}")
 
@@ -340,6 +357,10 @@ def process_video(binary, url, channel_cache):
         else:
             log_warn("Could not fetch channel metadata")
 
+    # ── Mark download as complete ─────────────────────────────────────────────
+    log_step("Download complete")
+    complete_marker.touch()
+    log_ok(f"Marked as complete by creating file {C.CYAN}COMPLETE{C.RESET} ")
     log_ok(f"{C.BOLD}Done:{C.RESET} {folder_name}\n")
     return True
 
