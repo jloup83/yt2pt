@@ -104,7 +104,7 @@ def sanitize_filename(name, max_length=100):
 
 
 def ensure_list_file():
-    """Create list.txt with instructions and an example URL if it doesn't exist."""
+    """Create list.txt with instructions if it doesn't exist, then exit."""
     if LIST_FILE.exists():
         return
     content = (
@@ -118,6 +118,9 @@ def ensure_list_file():
         "# https://www.youtube.com/watch?v=eot4NJwbr3M\n"
     )
     LIST_FILE.write_text(content)
+    print(f"\n  {C.YELLOW}⚠  list.txt was missing — created with instructions.{C.RESET}")
+    print(f"  {C.YELLOW}   Add your YouTube URLs to list.txt and run again.{C.RESET}\n")
+    sys.exit(1)
     log_ok(f"Created {C.CYAN}{LIST_FILE.name}{C.RESET} — add your video URLs and run again")
 
 
