@@ -51,7 +51,7 @@ interface TestCtx {
 
 function makeCtx(peertube?: PeertubeConnection, token = "tok"): TestCtx {
   const dir = mkdtempSync(join(tmpdir(), "yt2pt-peertube-"));
-  const configPath = join(dir, "yt2pt.conf.toml");
+  const configPath = join(dir, "yt2pt.toml");
   writeFileSync(configPath, "", "utf-8");
 
   const db = new Database(":memory:");

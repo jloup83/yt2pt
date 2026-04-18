@@ -48,13 +48,13 @@ sudo systemctl restart yt2ptd.service
 ### `ENOENT … mkdir '/nonexistent/.local/share/yt2pt'`
 
 Cause: path mode detected as `user` instead of `root`. This happens when
-`/etc/yt2pt/yt2pt.conf.toml` is missing.
+`/etc/yt2pt/yt2pt.toml` is missing.
 
 Fix: make sure the installer ran cleanly, or recreate the config:
 
 ```bash
 sudo install -d -m 0750 -o root -g yt2pt /etc/yt2pt
-sudo install -m 0640 -o root -g yt2pt yt2pt.conf.example.toml /etc/yt2pt/yt2pt.conf.toml
+sudo install -m 0640 -o root -g yt2pt yt2pt.production.toml /etc/yt2pt/yt2pt.toml
 sudo systemctl restart yt2ptd.service
 ```
 
@@ -149,12 +149,12 @@ sudo systemctl start yt2ptd.service
 
 ## "Config file location does not exist" during upgrade
 
-The installer never overwrites `/etc/yt2pt/yt2pt.conf.toml`. If you
+The installer never overwrites `/etc/yt2pt/yt2pt.toml`. If you
 accidentally `--purge`d it, reinstall to get a fresh example:
 
 ```bash
 sudo ./deploy/install.sh
-sudoedit /etc/yt2pt/yt2pt.conf.toml
+sudoedit /etc/yt2pt/yt2pt.toml
 ```
 
 ---
@@ -164,7 +164,7 @@ sudoedit /etc/yt2pt/yt2pt.conf.toml
 Raise the log level:
 
 ```bash
-sudo sed -i 's/^log_level = .*/log_level = "debug"/' /etc/yt2pt/yt2pt.conf.toml
+sudo sed -i 's/^log_level = .*/log_level = "debug"/' /etc/yt2pt/yt2pt.toml
 sudo systemctl restart yt2ptd.service
 journalctl -u yt2ptd.service -f
 ```
@@ -181,4 +181,4 @@ Open an issue with:
 - `systemctl status yt2ptd.service --no-pager`
 - Last ~50 lines of `journalctl -u yt2ptd.service`
 - Last ~50 lines of `/var/log/yt2pt/yt2pt.log`
-- Your `yt2pt.conf.toml` with the `api_token` redacted
+- Your `yt2pt.toml` with the `api_token` redacted

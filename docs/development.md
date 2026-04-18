@@ -31,18 +31,20 @@ Common scripts:
 
 ## Dev-mode paths
 
-On macOS, or when a `yt2pt.conf.toml` exists in the repo root, the
+On macOS, or when a `yt2pt.toml` exists in the repo root, the
 daemon runs in **dev mode**:
 
-- config: `<repo>/yt2pt.conf.toml`
-- data:   `/tmp/yt2ptd/data`
-- logs:   `/tmp/yt2ptd/logs`
+- config: `<repo>/yt2pt.toml`
+- data:   `~/.local/share/yt2pt`
+- logs:   `~/.local/share/yt2pt/logs`
 - bin:    `<repo>/bin`
 
 Create a dev config:
 
 ```bash
-cp yt2pt.conf.example.toml yt2pt.conf.toml
+./deploy/install.sh --development
+# or manually:
+cp yt2pt.development.toml yt2pt.toml
 # edit as needed
 ```
 

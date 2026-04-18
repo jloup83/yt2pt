@@ -25,7 +25,7 @@ Returns the full config with sensitive fields (`api_token`) redacted.
 ### `PUT /api/settings`
 
 Body: a partial config object matching the TOML structure. Writes the
-merged result to `yt2pt.conf.toml` atomically. Most changes apply
+merged result to `yt2pt.toml` atomically. Most changes apply
 immediately; some (bind, port) require a restart.
 
 ### `POST /api/settings/token`

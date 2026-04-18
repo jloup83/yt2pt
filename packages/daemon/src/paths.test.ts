@@ -1,10 +1,12 @@
 import { describe, it, before, after } from "node:test";
 import assert from "node:assert/strict";
+import { homedir } from "node:os";
+import { join } from "node:path";
 import { resolvePaths } from "@yt2pt/shared";
 
 /**
  * These tests rely on dev-mode detection: on macOS the resolver always
- * returns dev mode; on Linux it returns dev mode when `yt2pt.conf.toml`
+ * returns dev mode; on Linux it returns dev mode when `yt2pt.toml`
  * exists at the repo root (which it does in this workspace).
  */
 describe("resolvePaths() zero-config defaults", () => {
@@ -23,11 +25,12 @@ describe("resolvePaths() zero-config defaults", () => {
     if (savedConfig !== undefined) process.env["YT2PT_CONFIG"] = savedConfig;
   });
 
-  it("dev mode uses /tmp/yt2ptd/data and /tmp/yt2ptd/logs", () => {
+  it("dev mode uses ~/.local/share/yt2pt for data and logs", () => {
     const p = resolvePaths();
+    const home = homedir();
     assert.equal(p.mode, "dev");
-    assert.equal(p.dataDir, "/tmp/yt2ptd/data");
-    assert.equal(p.logDir, "/tmp/yt2ptd/logs");
+    assert.equal(p.dataDir, join(home, ".local", "share", "yt2pt"));
+    assert.equal(p.logDir, join(home, ".local", "share", "yt2pt", "logs"));
     assert.notEqual(p.dataDir, p.logDir, "data and log dirs must not collapse");
   });
 
