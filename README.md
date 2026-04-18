@@ -21,7 +21,7 @@ Download YouTube videos with full metadata, subtitles, and channel info — orga
 Add this to your `~/.zshrc` or `~/.bashrc`:
 
 ```bash
-alias yt2pt='python3 /Users/jean-loup/Engineering/yt2pt/yt2pt.py'
+alias yt2pt='python3 /path/to/yt2pt/yt2pt.py'
 ```
 
 Then reload your shell:

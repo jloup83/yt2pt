@@ -238,15 +238,28 @@ def process_video(binary, url, channel_cache):
 
     channel_name = sanitize_filename(meta.get("channel") or meta.get("uploader") or "Unknown")
     raw_date = meta.get("upload_date") or "19700101"
-    pub_date = f"{raw_date[:4]}-{raw_date[4:6]}-{raw_date[6:8]}"
+    # Build date + time string: 2026-04-16 - 20h09
+    timestamp = meta.get("timestamp")
+    if timestamp:
+        from datetime import datetime, timezone
+        dt = datetime.fromtimestamp(timestamp, tz=timezone.utc)
+        pub_date = dt.strftime("%Y-%m-%d")
+        pub_time = dt.strftime("%Hh%M")
+    else:
+        pub_date = f"{raw_date[:4]}-{raw_date[4:6]}-{raw_date[6:8]}"
+        pub_time = None
     title = sanitize_filename(meta.get("title") or "Untitled")
 
-    folder_name = f"{channel_name}_{pub_date}_{title}"
+    if pub_time:
+        folder_name = f"{channel_name} - {pub_date} - {pub_time} - {title}"
+    else:
+        folder_name = f"{channel_name} - {pub_date} - {title}"
 
     video_dir    = DOWNLOADS_DIR / channel_name / folder_name
     youtube_dir  = video_dir / "youtube"
-    subs_dir     = youtube_dir / "subtitles"
-    channel_dir  = video_dir / "channel"
+    meta_dir     = youtube_dir / "metadata"
+    subs_dir     = meta_dir / "subtitles"
+    channel_dir  = youtube_dir / "channel"
 
     # ── 2. Skip / overwrite check ────────────────────────────────────────────
     complete_marker = video_dir / "COMPLETE"
@@ -274,17 +287,17 @@ def process_video(binary, url, channel_cache):
         log_info(f"Removing {C.CYAN}{folder_name}{C.RESET} for fresh download")
         shutil.rmtree(video_dir)
 
-    log_header(f"{channel_name}  ·  {pub_date}  ·  {title}")
+    log_header(f"{channel_name}  ·  {pub_date}  ·  {pub_time or ''}  ·  {title}")
 
-    for d in (video_dir, youtube_dir, subs_dir, channel_dir):
+    for d in (video_dir, youtube_dir, meta_dir, subs_dir, channel_dir):
         d.mkdir(parents=True, exist_ok=True)
 
     # ── 3. Save video metadata JSON ──────────────────────────────────────────
     log_step("Saving video metadata")
-    (youtube_dir / "metadata.json").write_text(
+    (meta_dir / "metadata.json").write_text(
         json.dumps(meta, indent=2, ensure_ascii=False)
     )
-    log_ok(f"Saved {C.CYAN}youtube/metadata.json{C.RESET}")
+    log_ok(f"Saved {C.CYAN}youtube/metadata/metadata.json{C.RESET}")
 
     # ── 4. Download video (MKV, best quality ≤ 1080p) ────────────────────────
     log_step("Downloading video (MKV, ≤ 1080p)")
@@ -323,7 +336,7 @@ def process_video(binary, url, channel_cache):
     log_step("Downloading video thumbnail")
     thumb_url = meta.get("thumbnail")
     if thumb_url:
-        download_image(thumb_url, youtube_dir / "thumbnail.jpeg")
+        download_image(thumb_url, meta_dir / "thumbnail.jpeg")
     else:
         log_warn("No thumbnail URL in metadata")
 
@@ -338,7 +351,7 @@ def process_video(binary, url, channel_cache):
             (channel_dir / "metadata.json").write_text(
                 json.dumps(ch_meta, indent=2, ensure_ascii=False)
             )
-            log_ok(f"Saved {C.CYAN}channel/metadata.json{C.RESET}")
+            log_ok(f"Saved {C.CYAN}youtube/channel/metadata.json{C.RESET}")
 
             thumbnails = ch_meta.get("thumbnails") or []
 
