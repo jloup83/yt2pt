@@ -255,11 +255,11 @@ def process_video(binary, url, channel_cache):
     else:
         folder_name = f"{channel_name} - {pub_date} - {title}"
 
-    video_dir    = DOWNLOADS_DIR / channel_name / folder_name
-    youtube_dir  = video_dir / "youtube"
-    meta_dir     = youtube_dir / "metadata"
-    subs_dir     = meta_dir / "subtitles"
-    channel_dir  = youtube_dir / "channel"
+    video_dir     = DOWNLOADS_DIR / channel_name / folder_name
+    metadata_dir  = video_dir / "metadata"
+    video_meta    = metadata_dir / "video"
+    subs_dir      = video_meta / "subtitles"
+    channel_dir   = metadata_dir / "channel"
 
     # ── 2. Skip / overwrite check ────────────────────────────────────────────
     complete_marker = video_dir / "COMPLETE"
@@ -289,15 +289,15 @@ def process_video(binary, url, channel_cache):
 
     log_header(f"{channel_name}  ·  {pub_date}  ·  {pub_time or ''}  ·  {title}")
 
-    for d in (video_dir, youtube_dir, meta_dir, subs_dir, channel_dir):
+    for d in (video_dir, metadata_dir, video_meta, subs_dir, channel_dir):
         d.mkdir(parents=True, exist_ok=True)
 
     # ── 3. Save video metadata JSON ──────────────────────────────────────────
     log_step("Saving video metadata")
-    (meta_dir / "metadata.json").write_text(
+    (video_meta / "metadata.json").write_text(
         json.dumps(meta, indent=2, ensure_ascii=False)
     )
-    log_ok(f"Saved {C.CYAN}youtube/metadata/metadata.json{C.RESET}")
+    log_ok(f"Saved {C.CYAN}metadata/video/metadata.json{C.RESET}")
 
     # ── 4. Download video (MKV, best quality ≤ 1080p) ────────────────────────
     log_step("Downloading video (MKV, ≤ 1080p)")
@@ -336,7 +336,7 @@ def process_video(binary, url, channel_cache):
     log_step("Downloading video thumbnail")
     thumb_url = meta.get("thumbnail")
     if thumb_url:
-        download_image(thumb_url, meta_dir / "thumbnail.jpeg")
+        download_image(thumb_url, video_meta / "thumbnail.jpeg")
     else:
         log_warn("No thumbnail URL in metadata")
 
@@ -351,7 +351,7 @@ def process_video(binary, url, channel_cache):
             (channel_dir / "metadata.json").write_text(
                 json.dumps(ch_meta, indent=2, ensure_ascii=False)
             )
-            log_ok(f"Saved {C.CYAN}youtube/channel/metadata.json{C.RESET}")
+            log_ok(f"Saved {C.CYAN}metadata/channel/metadata.json{C.RESET}")
 
             thumbnails = ch_meta.get("thumbnails") or []
 
