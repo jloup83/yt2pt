@@ -142,7 +142,7 @@ export async function registerVideoRoutes(app: FastifyInstance): Promise<void> {
 
     const page = q.page ? Math.max(1, Number(q.page) | 0) : 1;
     const perPageRaw = q.per_page ? Number(q.per_page) | 0 : 50;
-    const perPage = Math.max(1, Math.min(200, perPageRaw));
+    const perPage = Math.max(1, perPageRaw);
 
     const sort = SORT_COLUMNS.has(q.sort ?? "") ? (q.sort as "updated_at" | "created_at" | "title" | "upload_date") : "updated_at";
     const order = q.order === "asc" ? "asc" : "desc";
