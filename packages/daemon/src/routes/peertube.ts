@@ -195,15 +195,26 @@ export async function registerPeertubeRoutes(app: FastifyInstance): Promise<void
     }
     const overrides = sanitizeOverrides(body.overrides);
 
-    // Refuse to create a duplicate yt2pt mapping. The user must remove
-    // the existing one explicitly first.
+    // If a mapping already exists, the PT channel was created previously.
+    // Skip creation and just kick off a sync so missing videos start
+    // flowing — this makes the endpoint idempotent from the user's POV.
     const existing = getChannelByUrl(ctx.db, normalized);
     if (existing) {
-      reply.code(409);
+      ctx.logger.info(
+        `create-from-youtube: channel already mapped — skipping PT channel creation ` +
+          `(youtube_url=${normalized}, mapping_id=${existing.id}, ` +
+          `peertube_channel_id=${existing.peertube_channel_id})`,
+      );
+      const syncResult = triggerSyncSafely(ctx, existing.id);
+      reply.code(200);
       return {
-        error: "this YouTube channel is already mapped",
-        channel_id: existing.id,
-        peertube_channel_id: existing.peertube_channel_id,
+        already_mapped: true,
+        mapping: {
+          id: existing.id,
+          youtube_channel_url: existing.youtube_channel_url,
+          peertube_channel_id: existing.peertube_channel_id,
+        },
+        sync: syncResult,
       };
     }
 
@@ -275,6 +286,16 @@ export async function registerPeertubeRoutes(app: FastifyInstance): Promise<void
       peertube_channel_id: String(result.created.id),
     });
 
+    ctx.logger.info(
+      `create-from-youtube: created PeerTube channel and mapping ` +
+        `(youtube_url=${normalized}, mapping_id=${mapping.id}, ` +
+        `peertube_channel_id=${result.created.id}, name=${result.created.name}, ` +
+        `displayName=${result.payload.displayName})`,
+    );
+
+    // Kick off the initial sync so the user doesn't have to click again.
+    const syncResult = triggerSyncSafely(ctx, mapping.id);
+
     // Invalidate the PT channels cache so the UI dropdown refreshes.
     cache = null;
 
@@ -288,6 +309,7 @@ export async function registerPeertubeRoutes(app: FastifyInstance): Promise<void
       peertube_channel: result.created,
       payload: result.payload,
       warnings: result.warnings,
+      sync: syncResult,
     };
   });
 }
@@ -301,4 +323,40 @@ function sanitizeOverrides(raw: unknown): BuildPayloadOverrides {
     if (typeof v === "string") out[k] = v;
   }
   return out;
+}
+
+/**
+ * Trigger a sync without throwing. Returns a small status object suitable
+ * for inclusion in API responses. Used by create-from-youtube to start
+ * pulling videos right after a mapping is created (or already exists).
+ */
+function triggerSyncSafely(
+  ctx: ServerContext,
+  channelId: number,
+): { status: "started" | "in_progress" | "rate_limited" | "unavailable" | "error"; retry_after_s?: number; error?: string } {
+  if (!ctx.sync) {
+    ctx.logger.warn(
+      `create-from-youtube: sync engine unavailable, skipping auto-sync (channel_id=${channelId})`,
+    );
+    return { status: "unavailable" };
+  }
+  try {
+    const r = ctx.sync.trigger(channelId);
+    if (r.status === "in_progress") {
+      ctx.logger.info(`create-from-youtube: sync already in progress (channel_id=${channelId})`);
+      return { status: "in_progress" };
+    }
+    if (r.status === "rate_limited") {
+      ctx.logger.info(
+        `create-from-youtube: sync rate-limited (channel_id=${channelId}, retry_after_s=${r.retry_after_s})`,
+      );
+      return { status: "rate_limited", retry_after_s: r.retry_after_s };
+    }
+    ctx.logger.info(`create-from-youtube: sync started (channel_id=${channelId})`);
+    return { status: "started" };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    ctx.logger.error(`create-from-youtube: sync trigger failed (channel_id=${channelId}): ${msg}`);
+    return { status: "error", error: msg };
+  }
 }

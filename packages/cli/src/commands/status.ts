@@ -11,6 +11,18 @@ interface PeertubeStatus {
 interface HealthResponse {
   status: string;
   version?: string;
+  storage?: {
+    disk_total_bytes: number;
+    disk_free_bytes: number;
+    data_dir_bytes: number;
+  };
+}
+
+function fmtBytes(b: number): string {
+  if (b < 1024) return `${b} B`;
+  if (b < 1024 * 1024) return `${(b / 1024).toFixed(1)} KB`;
+  if (b < 1024 * 1024 * 1024) return `${(b / (1024 * 1024)).toFixed(1)} MB`;
+  return `${(b / (1024 * 1024 * 1024)).toFixed(2)} GB`;
 }
 
 export async function runStatus(client: ApiClient): Promise<number> {
@@ -37,6 +49,16 @@ export async function runStatus(client: ApiClient): Promise<number> {
         : bad("not authenticated")
     }`,
   );
+
+  if (health.storage) {
+    const s = health.storage;
+    const used = s.disk_total_bytes - s.disk_free_bytes;
+    const pct = s.disk_total_bytes > 0 ? ((used / s.disk_total_bytes) * 100).toFixed(1) : "?";
+    lines.push("");
+    lines.push(`Disk:      ${fmtBytes(s.disk_total_bytes)} total, ${fmtBytes(s.disk_free_bytes)} free (${pct}% used)`);
+    lines.push(`Data dir:  ${fmtBytes(s.data_dir_bytes)}`);
+  }
+
   process.stdout.write(`${lines.join("\n")}\n`);
   return 0;
 }

@@ -5,10 +5,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   buildPeertubeChannelPayload,
+  createPeertubeChannel,
   slugifyForPeertube,
   stagePeertubeChannelAssets,
   PeertubeApiError,
 } from "./create-channel";
+import type { PeertubeConnection } from "./connection";
 
 // ── slugifyForPeertube ──────────────────────────────────────────────
 
@@ -137,4 +139,70 @@ test("PeertubeApiError carries status + body", () => {
   assert.equal(e.status, 409);
   assert.deepEqual(e.body, { code: "channel_name_already_exists" });
   assert.equal(e.name, "PeertubeApiError");
+});
+
+// ── createPeertubeChannel: empty optional fields are omitted ────────
+
+test("createPeertubeChannel omits empty description / support from POST body", async () => {
+  const calls: Array<{ path: string; init: RequestInit }> = [];
+  const fakePt = {
+    authFetch: async (path: string, init: RequestInit = {}) => {
+      calls.push({ path, init });
+      // First call: POST /video-channels (create). Second call: GET detail.
+      if (calls.length === 1) {
+        return new Response(
+          JSON.stringify({ videoChannel: { id: 42 } }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        );
+      }
+      return new Response(
+        JSON.stringify({ id: 42, name: "foo", displayName: "Foo" }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+    },
+  } as unknown as PeertubeConnection;
+
+  await createPeertubeChannel(fakePt, {
+    name: "foo",
+    displayName: "Foo",
+    description: "",
+    support: "   ",
+  });
+
+  const post = calls[0]!;
+  assert.equal(post.init.method, "POST");
+  const body = JSON.parse(String(post.init.body));
+  assert.deepEqual(body, { name: "foo", displayName: "Foo" });
+  assert.equal("description" in body, false);
+  assert.equal("support" in body, false);
+});
+
+test("createPeertubeChannel keeps non-empty description / support", async () => {
+  const calls: Array<{ path: string; init: RequestInit }> = [];
+  const fakePt = {
+    authFetch: async (path: string, init: RequestInit = {}) => {
+      calls.push({ path, init });
+      if (calls.length === 1) {
+        return new Response(
+          JSON.stringify({ videoChannel: { id: 1 } }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        );
+      }
+      return new Response(
+        JSON.stringify({ id: 1, name: "bar", displayName: "Bar" }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+    },
+  } as unknown as PeertubeConnection;
+
+  await createPeertubeChannel(fakePt, {
+    name: "bar",
+    displayName: "Bar",
+    description: "hello",
+    support: "thanks",
+  });
+
+  const body = JSON.parse(String(calls[0]!.init.body));
+  assert.equal(body.description, "hello");
+  assert.equal(body.support, "thanks");
 });

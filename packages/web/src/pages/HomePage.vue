@@ -6,8 +6,32 @@ import {
   type ChannelSummary,
   type PeertubeChannel,
   type PeertubeStatus,
+  type StorageInfo,
 } from "../api";
 import { useEvents } from "../composables/useEvents";
+
+// ── Storage info ──────────────────────────────────────────────────
+const storage = ref<StorageInfo | null>(null);
+
+function fmtBytes(b: number): string {
+  if (b < 1024) return `${b} B`;
+  if (b < 1024 * 1024) return `${(b / 1024).toFixed(1)} KB`;
+  if (b < 1024 * 1024 * 1024) return `${(b / (1024 * 1024)).toFixed(1)} MB`;
+  return `${(b / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+}
+
+function diskUsedPct(): string {
+  if (!storage.value || !storage.value.disk_total_bytes) return "—";
+  const used = storage.value.disk_total_bytes - storage.value.disk_free_bytes;
+  return `${((used / storage.value.disk_total_bytes) * 100).toFixed(1)}%`;
+}
+
+async function loadStorage(): Promise<void> {
+  try {
+    const res = await endpoints.health();
+    storage.value = res.storage;
+  } catch { /* swallow — non-critical */ }
+}
 
 // ── PeerTube status (SSE-driven, with an initial HTTP fetch) ──────
 const ptStatus = ref<PeertubeStatus | null>(null);
@@ -228,8 +252,8 @@ async function onPreviewCreate(): Promise<void> {
     createOverrides.value = { ...res.payload };
     if (res.already_mapped) {
       createStatus.value = {
-        kind: "err",
-        msg: `This YouTube channel is already mapped to PeerTube channel #${res.existing_peertube_channel_id}.`,
+        kind: "ok",
+        msg: `This YouTube channel is already mapped to PeerTube channel #${res.existing_peertube_channel_id}. Click Confirm to start syncing missing videos.`,
       };
     }
   } catch (err) {
@@ -248,11 +272,21 @@ async function onConfirmCreate(): Promise<void> {
       createYtUrl.value.trim(),
       createOverrides.value,
     );
-    const warn = res.warnings.length > 0 ? ` (warnings: ${res.warnings.join("; ")})` : "";
-    createStatus.value = {
-      kind: "ok",
-      msg: `Created PeerTube channel ${res.peertube_channel.name} (#${res.peertube_channel.id})${warn}`,
-    };
+    const syncMsg = formatSyncStatus(res.sync);
+    if (res.already_mapped) {
+      createStatus.value = {
+        kind: "ok",
+        msg: `Channel already exists on PeerTube (#${res.mapping.peertube_channel_id}); ${syncMsg}.`,
+      };
+    } else {
+      const warn = res.warnings && res.warnings.length > 0 ? ` (warnings: ${res.warnings.join("; ")})` : "";
+      const ptName = res.peertube_channel?.name ?? "(unknown)";
+      const ptId = res.peertube_channel?.id ?? "?";
+      createStatus.value = {
+        kind: "ok",
+        msg: `Created PeerTube channel ${ptName} (#${ptId})${warn}; ${syncMsg}.`,
+      };
+    }
     createPreview.value = null;
     createYtUrl.value = "";
     await Promise.all([loadChannels(), loadPtChannels()]);
@@ -276,6 +310,21 @@ function onCancelCreate(): void {
   createStatus.value = null;
 }
 
+function formatSyncStatus(
+  sync: { status: string; retry_after_s?: number; error?: string } | undefined,
+): string {
+  if (!sync) return "sync not started";
+  switch (sync.status) {
+    case "started": return "sync started";
+    case "in_progress": return "sync already in progress";
+    case "rate_limited":
+      return `sync rate-limited (retry in ${sync.retry_after_s ?? "?"}s)`;
+    case "unavailable": return "sync engine unavailable";
+    case "error": return `sync trigger failed: ${sync.error ?? "unknown error"}`;
+    default: return `sync status: ${sync.status}`;
+  }
+}
+
 // Refresh the channels list whenever a sync finishes on any channel.
 events.onSyncComplete(() => { void loadChannels(); });
 // Surface terminal sync failures to the matching row.
@@ -284,7 +333,7 @@ events.onSyncFailed((ev) => {
 });
 
 onMounted(async () => {
-  await Promise.all([primeStatus(), loadChannels(), loadPtChannels()]);
+  await Promise.all([primeStatus(), loadStorage(), loadChannels(), loadPtChannels()]);
 });
 </script>
 
@@ -293,6 +342,20 @@ onMounted(async () => {
     <h1>Home</h1>
     <p>PeerTube connection + mapped YouTube channels.</p>
   </hgroup>
+
+  <!-- ── Storage info ─────────────────────────────────────────── -->
+  <article v-if="storage">
+    <header><strong>Storage</strong></header>
+    <div class="status-bar">
+      <span>Disk capacity: <strong>{{ fmtBytes(storage.disk_total_bytes) }}</strong></span>
+      <span class="sep">·</span>
+      <span>Disk free: <strong>{{ fmtBytes(storage.disk_free_bytes) }}</strong></span>
+      <span class="sep">·</span>
+      <span>Disk used: <strong>{{ diskUsedPct() }}</strong></span>
+      <span class="sep">·</span>
+      <span>Data folder: <strong>{{ fmtBytes(storage.data_dir_bytes) }}</strong></span>
+    </div>
+  </article>
 
   <!-- ── PeerTube status bar ──────────────────────────────────── -->
   <article>
@@ -497,8 +560,8 @@ onMounted(async () => {
       </p>
       <div class="row">
         <button type="submit" :aria-busy="createBusy"
-          :disabled="createBusy || !createOverrides.name.trim() || createPreview.already_mapped">
-          Create PeerTube channel
+          :disabled="createBusy || !createOverrides.name.trim()">
+          {{ createPreview.already_mapped ? "Sync existing channel" : "Create PeerTube channel" }}
         </button>
         <button type="button" class="secondary outline" :disabled="createBusy" @click="onCancelCreate">
           Cancel

@@ -44,7 +44,12 @@ export const api = {
 
 // ── Typed endpoint helpers ──────────────────────────────────────────
 
-export interface HealthResponse { status: string; version: string }
+export interface StorageInfo {
+  disk_total_bytes: number;
+  disk_free_bytes: number;
+  data_dir_bytes: number;
+}
+export interface HealthResponse { status: string; version: string; storage: StorageInfo }
 export interface PeertubeStatus {
   online: boolean;
   authenticated: boolean;
@@ -153,9 +158,11 @@ export const endpoints = {
   ) =>
     api.post<{
       mapping: { id: number; youtube_channel_url: string; peertube_channel_id: string };
-      peertube_channel: { id: number; name: string; displayName: string };
-      payload: { name: string; displayName: string; description: string; support: string };
-      warnings: string[];
+      peertube_channel?: { id: number; name: string; displayName: string };
+      payload?: { name: string; displayName: string; description: string; support: string };
+      warnings?: string[];
+      already_mapped?: boolean;
+      sync?: { status: "started" | "in_progress" | "rate_limited" | "unavailable" | "error"; retry_after_s?: number; error?: string };
     }>("/peertube/channels/create-from-youtube", { youtube_url, overrides }),
   previewPeertubeChannelFromYoutube: (
     youtube_url: string,

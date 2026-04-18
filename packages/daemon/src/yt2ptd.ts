@@ -4,7 +4,7 @@ import { resolve, join } from "node:path";
 import { networkInterfaces } from "node:os";
 import { loadConfig, createLogger, ensureDirs, rotateLogFile } from "@yt2pt/shared";
 import { openDatabase } from "./db";
-import { buildServer } from "./server";
+import { buildServer, getStorageInfo } from "./server";
 import { JobQueue } from "./queue";
 import { PeertubeConnection } from "./peertube/connection";
 import { createProcessors, findYtDlpBinary } from "./workers";
@@ -140,6 +140,25 @@ async function main(): Promise<void> {
     logger.info(`  log_dir:  ${paths.logDir}`);
     logger.info(`  bin_dir:  ${paths.binDir}`);
     logger.info(`  db:       ${paths.dataDir}/yt2pt.db`);
+    logger.info(
+      `  yt-dlp rate limit: ${
+        config.ytdlp.rate_limit_enabled
+          ? `enabled (${config.ytdlp.rate_limit})`
+          : "disabled"
+      }`
+    );
+
+    const storage = getStorageInfo(paths.dataDir, logger);
+    const fmtB = (b: number): string => {
+      if (b < 1024) return `${b} B`;
+      if (b < 1024 * 1024) return `${(b / 1024).toFixed(1)} KB`;
+      if (b < 1024 * 1024 * 1024) return `${(b / (1024 * 1024)).toFixed(1)} MB`;
+      return `${(b / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+    };
+    const used = storage.disk_total_bytes - storage.disk_free_bytes;
+    const pct = storage.disk_total_bytes > 0 ? ((used / storage.disk_total_bytes) * 100).toFixed(1) : "?";
+    logger.info(`  disk:     ${fmtB(storage.disk_total_bytes)} total, ${fmtB(storage.disk_free_bytes)} free (${pct}% used)`);
+    logger.info(`  data_dir size: ${fmtB(storage.data_dir_bytes)}`);
   } catch (err) {
     logger.error(`Failed to start server: ${err instanceof Error ? err.message : String(err)}`);
     process.exit(1);
