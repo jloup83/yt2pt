@@ -54,6 +54,20 @@ export class PeertubeConnection {
     try {
       const res = await this.rawFetch(input, init);
       this.opts.logger.debug(`← ${method} ${url} ${res.status} (${Date.now() - t0}ms)`);
+      // In debug mode, also dump the response body (truncated) so we can
+      // see exactly what PeerTube said — especially for 4xx/5xx errors.
+      // Clone the response first so callers can still read the body.
+      try {
+        const clone = res.clone();
+        const text = await clone.text();
+        if (text.length > 0) {
+          const MAX = 2000;
+          const shown = text.length > MAX ? `${text.slice(0, MAX)}…[+${text.length - MAX} bytes]` : text;
+          this.opts.logger.debug(`  body=${shown}`);
+        }
+      } catch {
+        // Body was already consumed or not readable; ignore.
+      }
       return res;
     } catch (err) {
       this.opts.logger.debug(`✗ ${method} ${url} failed after ${Date.now() - t0}ms: ${errMsg(err)}`);
