@@ -223,7 +223,7 @@ info "Creating directories"
 install -d -m 0755 -o root           -g root           "${LIB_DIR}"
 install -d -m 0755 -o root           -g root           "${APP_DIR}"
 install -d -m 0755 -o root           -g root           "${YTDLP_DIR}"
-install -d -m 0750 -o root           -g "${SERVICE_GROUP}" "${CONFIG_DIR}"
+install -d -m 0750 -o "${SERVICE_USER}" -g "${SERVICE_GROUP}" "${CONFIG_DIR}"
 install -d -m 0750 -o "${SERVICE_USER}" -g "${SERVICE_GROUP}" "${DATA_DIR}"
 install -d -m 0750 -o "${SERVICE_USER}" -g "${SERVICE_GROUP}" "${LOG_DIR}"
 
@@ -287,7 +287,7 @@ if [[ -e "${CONFIG_FILE}" ]]; then
   info "Preserving existing config: ${CONFIG_FILE}"
 else
   info "Installing default config: ${CONFIG_FILE}"
-  install -m 0640 -o root -g "${SERVICE_GROUP}" \
+  install -m 0640 -o "${SERVICE_USER}" -g "${SERVICE_GROUP}" \
     "${REPO_ROOT}/yt2pt.production.toml" "${CONFIG_FILE}"
 fi
 
@@ -327,7 +327,7 @@ ${c_green}yt2pt installed successfully.${c_reset}
 
   Logs:
     journalctl -u ${SERVICE_NAME} -f               # live journal logs
-    tail -f ${LOG_DIR}/yt2ptd.log                   # log file
+    tail -f ${LOG_DIR}/yt2pt.log                    # log file
 
   CLI:
     yt2pt status
