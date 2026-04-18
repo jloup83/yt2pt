@@ -29,6 +29,10 @@ upload_concurrency = 1
 format = "bv*[height<=1080]+ba/b[height<=1080]"
 merge_output_format = "mkv"
 thumbnail_format = "jpg"
+# Bandwidth cap passed verbatim to yt-dlp's --limit-rate. Suffixes K/M/G accepted.
+# Set rate_limit_enabled = false to disable the cap entirely.
+rate_limit_enabled = true
+rate_limit = "10M"
 
 [peertube]
 instance_url = ""

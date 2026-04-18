@@ -30,7 +30,7 @@ function makeConfig(): Config {
     },
     http: { port: 8090, bind: "0.0.0.0" },
     workers: { download_concurrency: 1, convert_concurrency: 1, upload_concurrency: 1 },
-    ytdlp: { format: "bv*+ba/b", merge_output_format: "mkv", thumbnail_format: "jpg" },
+    ytdlp: { format: "bv*+ba/b", merge_output_format: "mkv", thumbnail_format: "jpg", rate_limit_enabled: true, rate_limit: "10M" },
     peertube: {
       instance_url: "https://peertube.example", api_token: "",
       channel_id: "", privacy: "public", language: "", licence: "",
