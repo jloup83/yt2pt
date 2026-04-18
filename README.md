@@ -1,5 +1,140 @@
 # yt2pt
 
+**Automated YouTube → PeerTube migration, as a long-running daemon with a
+Web UI, CLI, and REST API.**
+
+yt2pt watches a set of YouTube channels you care about, downloads each new
+video with `yt-dlp` (metadata, thumbnail, subtitles, chapters), and uploads
+them to the matching channels on your PeerTube instance. It runs as a
+system service on Linux, or as a local dev process on macOS / Linux.
+
+---
+
+## Architecture
+
+```
+                ┌───────────────────────────────┐
+                │        yt2ptd (daemon)        │
+                │  ┌─────────────────────────┐  │
+ Web UI ──────► │  │  Fastify HTTP + SSE     │  │ ◄──── CLI (yt2pt)
+ (bundled)      │  └───────┬─────────────────┘  │       curl / any client
+                │          │                    │
+                │  ┌───────▼──────┐  ┌───────┐  │
+                │  │  SQLite DB   │  │ Queue │  │
+                │  └──────────────┘  └───┬───┘  │
+                │                        │      │
+                │        ┌───────────────▼───┐  │
+                │        │ download/convert/ │  │
+                │        │   upload workers  │  │
+                │        └─────────┬─────────┘  │
+                └──────────────────┼────────────┘
+                                   │
+                          yt-dlp ──┴── PeerTube API
+```
+
+- **Daemon (`yt2ptd`)** — Fastify server, SQLite state, background queue,
+  sync engine, worker pool.
+- **Web UI** — Vue SPA, bundled with the daemon and served from `/`.
+- **CLI (`yt2pt`)** — thin REST client for the daemon; also consumes the
+  SSE stream for live sync progress.
+- **REST API** — `GET /api/health`, `/api/settings`, `/api/peertube/…`,
+  `/api/channels…`, `/api/videos…`, `/api/events` (SSE).
+
+See [docs/architecture.md](docs/architecture.md) for more detail.
+
+---
+
+## Supported platforms
+
+| Platform | Role |
+|----------|------|
+| **Linux x86_64** | Production install (systemd service) **and** dev |
+| **macOS (Intel / Apple Silicon)** | Dev only (runs in dev-mode paths) |
+
+`yt-dlp` binaries for Linux and macOS are bundled in `bin/`.
+
+---
+
+## Quick start (Linux, system install)
+
+### 1. Prerequisites
+
+- **Node.js ≥ 22** installed **system-wide** (not under `$HOME`/nvm — the
+  daemon runs as a dedicated user and cannot read your home directory).
+- **ffmpeg** (required by `yt-dlp` to merge audio + video).
+- Build tools to compile `better-sqlite3` on first `npm ci`.
+
+```bash
+# Debian / Ubuntu / Kubuntu:
+curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
+sudo apt install -y nodejs ffmpeg build-essential
+```
+
+### 2. Build
+
+```bash
+git clone https://github.com/jloup83/yt2pt.git
+cd yt2pt
+npm ci
+npm run build:all
+```
+
+### 3. Install
+
+```bash
+sudo ./deploy/install.sh
+```
+
+This creates the `yt2pt` system user, lays files under `/usr/local`,
+`/etc/yt2pt`, `/var/lib/yt2pt`, `/var/log/yt2pt`, and installs the
+`yt2ptd.service` unit.
+
+### 4. Configure PeerTube credentials
+
+```bash
+sudoedit /etc/yt2pt/yt2pt.toml          # set instance_url
+yt2pt token <your-peertube-username> <your-password>
+```
+
+### 5. Start the daemon
+
+```bash
+sudo systemctl enable --now yt2ptd.service
+yt2pt status
+```
+
+### 6. Add a channel and sync
+
+Either use the Web UI at `http://<host>:8090`, or the CLI:
+
+```bash
+yt2pt channels add https://www.youtube.com/@SomeChannel <peertube-channel-id>
+yt2pt channels sync <channel-id>    # streams live progress
+```
+
+---
+
+## Documentation
+
+| Topic | File |
+|-------|------|
+| Install / upgrade / uninstall | [docs/installation.md](docs/installation.md) |
+| systemd service management & logs | [docs/service.md](docs/service.md) |
+| Configuration reference | [docs/configuration.md](docs/configuration.md) |
+| CLI reference | [docs/cli.md](docs/cli.md) |
+| Web UI guide | [docs/web-ui.md](docs/web-ui.md) |
+| REST API + SSE events | [docs/api.md](docs/api.md) |
+| Architecture | [docs/architecture.md](docs/architecture.md) |
+| Development setup | [docs/development.md](docs/development.md) |
+| Troubleshooting | [docs/troubleshooting.md](docs/troubleshooting.md) |
+
+---
+
+## License
+
+See [LICENSE](LICENSE).
+# yt2pt
+
 Download YouTube videos with metadata and thumbnails, organized for PeerTube migration.
 
 **Supported platforms:** macOS (Intel & Apple Silicon), Linux (x86_64)
@@ -72,22 +207,20 @@ chmod +x bin/yt-dlp-linux-*
 
 ## PeerTube Authentication
 
-Before uploading videos, you need to configure your PeerTube credentials in `yt2pt.conf.json`.
+Before uploading videos, you need to configure your PeerTube credentials in `yt2pt.toml`.
 
 ### 1. Create your config file
 
 ```bash
-cp yt2pt.conf.example.json yt2pt.conf.json
+./deploy/install.sh --development
+# or manually: cp yt2pt.development.toml yt2pt.toml
 ```
 
 Set your instance URL:
 
-```json
-{
-  "peertube": {
-    "instance_url": "https://your-instance.example.com"
-  }
-}
+```toml
+[peertube]
+instance_url = "https://your-instance.example.com"
 ```
 
 ### 2. Get your API token
@@ -110,8 +243,7 @@ API="https://your-instance.example.com/api/v1" && \
     --data username="$USER" \
     --data-urlencode password="$PASS" \
     | jq -r .access_token) && \
-  jq --arg t "$TOKEN" '.peertube.api_token = $t' yt2pt.conf.json > tmp.$$.json && \
-  mv tmp.$$.json yt2pt.conf.json && \
+  sed -i.bak -E "s|^api_token = .*|api_token = \"$TOKEN\"|" yt2pt.toml && rm yt2pt.toml.bak && \
   echo "Token set successfully"
 ```
 
@@ -135,14 +267,11 @@ API="https://your-instance.example.com/api/v1" && \
      | jq -r .access_token
    ```
 
-3. Copy the token into `yt2pt.conf.json`:
+3. Copy the token into `yt2pt.toml`:
 
-   ```json
-   {
-     "peertube": {
-       "api_token": "YOUR_ACCESS_TOKEN"
-     }
-   }
+   ```toml
+   [peertube]
+   api_token = "YOUR_ACCESS_TOKEN"
    ```
 
 > **Note:** Access tokens expire after ~4 hours. You will need to regenerate the token when it expires.
@@ -155,12 +284,9 @@ curl -s https://your-instance.example.com/api/v1/accounts/YOUR_USERNAME/video-ch
 
 Set the channel ID in your config:
 
-```json
-{
-  "peertube": {
-    "channel_id": "YOUR_CHANNEL_ID"
-  }
-}
+```toml
+[peertube]
+channel_id = "YOUR_CHANNEL_ID"
 ```
 
 ## Usage

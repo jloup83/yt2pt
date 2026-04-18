@@ -1,0 +1,17 @@
+{
+  "name": "yt2pt",
+  "version": "1.0.0-beta",
+  "private": true,
+  "description": "Command-line client for the yt2ptd daemon (YouTube → PeerTube migration)",
+  "main": "dist/index.js",
+  "bin": {
+    "yt2pt": "dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "test": "tsx --test 'src/**/*.test.ts'"
+  },
+  "devDependencies": {
+    "tsx": "^4.21.0"
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "name": "@yt2pt/daemon",
+  "version": "1.0.0-beta",
+  "private": true,
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "yt2ptd": "dist/yt2ptd.js"
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "test": "tsx --test 'src/**/*.test.ts' 'src/*.test.ts'"
+  },
+  "dependencies": {
+    "@fastify/cors": "^11.2.0",
+    "@fastify/static": "^9.1.1",
+    "@yt2pt/shared": "1.0.0-beta",
+    "better-sqlite3": "^12.9.0",
+    "fastify": "^5.8.5"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "tsx": "^4.21.0"
+  }
+}
