@@ -59,7 +59,7 @@ function makeCtx(peertube?: PeertubeConnection): TestCtx {
   db.pragma("foreign_keys = ON");
   runMigrations(db);
 
-  const logger = { error: () => {}, info: () => {}, debug: () => {} } as unknown as Logger;
+  const logger = { error: () => {}, warn: () => {}, info: () => {}, debug: () => {} } as unknown as Logger;
   const paths: ResolvedPaths = {
     mode: "dev",
     configPath,

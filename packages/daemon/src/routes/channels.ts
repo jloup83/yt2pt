@@ -2,6 +2,7 @@ import { execFile } from "node:child_process";
 import { existsSync, statSync, createReadStream } from "node:fs";
 import { join, resolve } from "node:path";
 import type { FastifyInstance } from "fastify";
+import type { Logger } from "@yt2pt/shared";
 import type { ServerContext } from "../server";
 import {
   deleteChannel,
@@ -45,7 +46,8 @@ export function normalizeYoutubeChannelUrl(raw: string): string | null {
 
 // ── yt-dlp channel name resolution ──────────────────────────────────
 
-function execFileP(cmd: string, args: string[], timeoutMs = 30_000): Promise<string> {
+function execFileP(cmd: string, args: string[], timeoutMs = 30_000, log?: Logger): Promise<string> {
+  log?.debug(`$ ${shellQuote(cmd, args)}`);
   return new Promise((resolve, reject) => {
     execFile(cmd, args, { maxBuffer: 10 * 1024 * 1024, timeout: timeoutMs }, (err, stdout, stderr) => {
       if (err) reject(new Error(stderr || err.message));
@@ -54,19 +56,29 @@ function execFileP(cmd: string, args: string[], timeoutMs = 30_000): Promise<str
   });
 }
 
+function shellQuote(cmd: string, args: string[]): string {
+  const q = (s: string): string =>
+    /^[A-Za-z0-9_./:@=+,-]+$/.test(s) ? s : `'${s.replace(/'/g, "'\\''")}'`;
+  return [cmd, ...args].map(q).join(" ");
+}
+
 /**
  * Ask yt-dlp for the channel display name. Uses `--flat-playlist` and
  * `--playlist-items 0` so nothing is actually downloaded, only the
  * top-level channel metadata.
  */
-export async function resolveYoutubeChannelName(ytdlp: string, url: string): Promise<string | null> {
+export async function resolveYoutubeChannelName(
+  ytdlp: string,
+  url: string,
+  log?: Logger,
+): Promise<string | null> {
   try {
     const stdout = await execFileP(ytdlp, [
       "--dump-single-json",
       "--flat-playlist",
       "--playlist-items", "0",
       url,
-    ]);
+    ], 30_000, log);
     const meta = JSON.parse(stdout) as { channel?: string; title?: string; uploader?: string };
     return meta.channel ?? meta.uploader ?? meta.title ?? null;
   } catch {
@@ -191,7 +203,7 @@ export async function registerChannelRoutes(app: FastifyInstance): Promise<void>
     let channelName: string | null = null;
     try {
       const ytdlp = await findYtDlpBinary(ctx.paths.binDir);
-      channelName = await resolveYoutubeChannelName(ytdlp, normalized);
+      channelName = await resolveYoutubeChannelName(ytdlp, normalized, ctx.logger);
     } catch (err) {
       ctx.logger.debug(`yt-dlp channel name resolution skipped: ${err instanceof Error ? err.message : String(err)}`);
     }

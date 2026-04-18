@@ -16,7 +16,7 @@ function freshDb() {
 }
 
 function silentLogger(): Logger {
-  return { error: () => {}, info: () => {}, debug: () => {} } as unknown as Logger;
+  return { error: () => {}, warn: () => {}, info: () => {}, debug: () => {} } as unknown as Logger;
 }
 
 function testConfig(overrides: Partial<Config["workers"]> = {}): Config {

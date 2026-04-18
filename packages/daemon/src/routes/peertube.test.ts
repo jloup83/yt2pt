@@ -58,7 +58,7 @@ function makeCtx(peertube?: PeertubeConnection, token = "tok"): TestCtx {
   db.pragma("foreign_keys = ON");
   runMigrations(db);
 
-  const logger = { error: () => {}, info: () => {}, debug: () => {} } as unknown as Logger;
+  const logger = { error: () => {}, warn: () => {}, info: () => {}, debug: () => {} } as unknown as Logger;
   const paths: ResolvedPaths = { mode: "dev", configPath, dataDir: dir, logDir: dir, binDir: dir };
 
   return {
@@ -98,7 +98,7 @@ function makeFakePeertube(
 
 test("fetchUserChannels maps and sorts video channels by displayName", async () => {
   const config = makeConfig();
-  const logger = { error: () => {}, info: () => {}, debug: () => {} } as unknown as Logger;
+  const logger = { error: () => {}, warn: () => {}, info: () => {}, debug: () => {} } as unknown as Logger;
   const fakeFetch: typeof fetch = async () =>
     new Response(
       JSON.stringify({
@@ -120,7 +120,7 @@ test("fetchUserChannels maps and sorts video channels by displayName", async () 
 
 test("fetchUserChannels throws on non-ok response", async () => {
   const config = makeConfig();
-  const logger = { error: () => {}, info: () => {}, debug: () => {} } as unknown as Logger;
+  const logger = { error: () => {}, warn: () => {}, info: () => {}, debug: () => {} } as unknown as Logger;
   const fakeFetch: typeof fetch = async () => new Response("", { status: 500 });
   const conn = makeFakePeertube(config, logger, fakeFetch);
   await assert.rejects(() => fetchUserChannels(conn), /users\/me returned 500/);
@@ -145,7 +145,7 @@ test("GET /api/peertube/status returns sentinel when peertube not wired", async 
 
 test("GET /api/peertube/status returns connection getStatus()", async () => {
   const config = makeConfig();
-  const logger = { error: () => {}, info: () => {}, debug: () => {} } as unknown as Logger;
+  const logger = { error: () => {}, warn: () => {}, info: () => {}, debug: () => {} } as unknown as Logger;
   const conn = makeFakePeertube(config, logger, (async () => new Response()) as typeof fetch, {
     online: true,
     authenticated: true,
@@ -179,7 +179,7 @@ test("GET /api/peertube/channels returns 503 when peertube not wired", async () 
 
 test("GET /api/peertube/channels returns 401 when not authenticated", async () => {
   const config = makeConfig();
-  const logger = { error: () => {}, info: () => {}, debug: () => {} } as unknown as Logger;
+  const logger = { error: () => {}, warn: () => {}, info: () => {}, debug: () => {} } as unknown as Logger;
   const conn = makeFakePeertube(config, logger, (async () => new Response()) as typeof fetch, {
     online: true,
     authenticated: false,
@@ -194,7 +194,7 @@ test("GET /api/peertube/channels returns 401 when not authenticated", async () =
 
 test("GET /api/peertube/channels returns channels and caches the result", async () => {
   const config = makeConfig();
-  const logger = { error: () => {}, info: () => {}, debug: () => {} } as unknown as Logger;
+  const logger = { error: () => {}, warn: () => {}, info: () => {}, debug: () => {} } as unknown as Logger;
   let callCount = 0;
   const fakeFetch: typeof fetch = async () => {
     callCount++;
@@ -236,7 +236,7 @@ test("GET /api/peertube/channels returns channels and caches the result", async 
 
 test("GET /api/peertube/channels returns 502 when the upstream call fails", async () => {
   const config = makeConfig();
-  const logger = { error: () => {}, info: () => {}, debug: () => {} } as unknown as Logger;
+  const logger = { error: () => {}, warn: () => {}, info: () => {}, debug: () => {} } as unknown as Logger;
   const fakeFetch: typeof fetch = async () => new Response("boom", { status: 500 });
   const conn = makeFakePeertube(config, logger, fakeFetch);
   const ctx = makeCtx(conn);
@@ -254,7 +254,7 @@ import { join as _join } from "node:path";
 
 test("POST /api/peertube/channels/create-from-youtube validates URL + auth", async () => {
   const config = makeConfig();
-  const logger = { error: () => {}, info: () => {}, debug: () => {} } as unknown as Logger;
+  const logger = { error: () => {}, warn: () => {}, info: () => {}, debug: () => {} } as unknown as Logger;
   const conn = makeFakePeertube(config, logger, async () => new Response("", { status: 200 }));
   const ctx = makeCtx(conn);
   const app = buildServer({ ...ctx, config });
@@ -278,7 +278,7 @@ test("POST /api/peertube/channels/create-from-youtube validates URL + auth", asy
 
 test("POST /api/peertube/channels/create-from-youtube returns 401 when not authenticated", async () => {
   const config = makeConfig();
-  const logger = { error: () => {}, info: () => {}, debug: () => {} } as unknown as Logger;
+  const logger = { error: () => {}, warn: () => {}, info: () => {}, debug: () => {} } as unknown as Logger;
   const conn = makeFakePeertube(config, logger, async () => new Response("", { status: 200 }), {
     authenticated: false,
   });
@@ -295,7 +295,7 @@ test("POST /api/peertube/channels/create-from-youtube returns 401 when not authe
 
 test("POST /api/peertube/channels/create-from-youtube wires fetcher → creator → mapping", async () => {
   const config = makeConfig();
-  const logger = { error: () => {}, info: () => {}, debug: () => {} } as unknown as Logger;
+  const logger = { error: () => {}, warn: () => {}, info: () => {}, debug: () => {} } as unknown as Logger;
   const conn = makeFakePeertube(config, logger, async () => new Response("", { status: 200 }));
   const ctx = makeCtx(conn);
 
@@ -354,7 +354,7 @@ test("POST /api/peertube/channels/create-from-youtube wires fetcher → creator 
 
 test("POST /api/peertube/channels/create-from-youtube returns 409 on PT slug conflict", async () => {
   const config = makeConfig();
-  const logger = { error: () => {}, info: () => {}, debug: () => {} } as unknown as Logger;
+  const logger = { error: () => {}, warn: () => {}, info: () => {}, debug: () => {} } as unknown as Logger;
   const conn = makeFakePeertube(config, logger, async () => new Response("", { status: 200 }));
   const ctx = makeCtx(conn);
 
@@ -396,7 +396,7 @@ test("POST /api/peertube/channels/create-from-youtube returns 409 on PT slug con
 
 test("POST /api/peertube/channels/create-from-youtube refuses duplicate yt2pt mapping", async () => {
   const config = makeConfig();
-  const logger = { error: () => {}, info: () => {}, debug: () => {} } as unknown as Logger;
+  const logger = { error: () => {}, warn: () => {}, info: () => {}, debug: () => {} } as unknown as Logger;
   const conn = makeFakePeertube(config, logger, async () => new Response("", { status: 200 }));
   const ctx = makeCtx(conn);
 

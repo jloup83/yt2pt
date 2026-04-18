@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { resolve, join } from "node:path";
+import { networkInterfaces } from "node:os";
 import { loadConfig, createLogger, ensureDirs, rotateLogFile } from "@yt2pt/shared";
 import { openDatabase } from "./db";
 import { buildServer } from "./server";
@@ -69,14 +70,38 @@ async function main(): Promise<void> {
 
   const app = buildServer({ config, paths, db, logger, peertube, queue, sync }, { webRoot });
 
+  let shuttingDown = false;
   const shutdown = async (signal: string): Promise<void> => {
+    if (shuttingDown) {
+      logger.error(`Received second ${signal}, forcing exit.`);
+      process.exit(1);
+    }
+    shuttingDown = true;
     logger.info(`Received ${signal}, shutting down...`);
+    // Hard-exit safety net: if graceful shutdown takes longer than 5s
+    // (e.g. fastify keep-alive sockets, in-flight fetches), bail out.
+    setTimeout(() => {
+      logger.error("Graceful shutdown timed out after 5s, forcing exit.");
+      process.exit(1);
+    }, 5000);
     try {
+      const t0 = Date.now();
       peertube.stop();
+      logger.debug(`  peertube.stop  ${Date.now() - t0}ms`);
+      const t1 = Date.now();
       sync.stopAll();
+      logger.debug(`  sync.stopAll   ${Date.now() - t1}ms`);
+      const t2 = Date.now();
       await queue.stop();
+      logger.debug(`  queue.stop     ${Date.now() - t2}ms`);
+      const t3 = Date.now();
+      // Forcefully close keep-alive HTTP sockets so app.close() doesn't hang.
+      app.server.closeAllConnections?.();
       await app.close();
+      logger.debug(`  app.close      ${Date.now() - t3}ms`);
+      const t4 = Date.now();
       db.close();
+      logger.debug(`  db.close       ${Date.now() - t4}ms`);
       logger.info("Shutdown complete.");
       process.exit(0);
     } catch (err) {
@@ -89,10 +114,31 @@ async function main(): Promise<void> {
   process.on("SIGINT", () => void shutdown("SIGINT"));
 
   try {
-    const address = await app.listen({ host: config.http.bind, port: config.http.port });
-    logger.info(`yt2ptd listening on ${address}`);
+    await app.listen({ host: config.http.bind, port: config.http.port });
+    const bind = config.http.bind;
+    const port = config.http.port;
+    const isWildcard = bind === "0.0.0.0" || bind === "::" || bind === "*";
+    if (isWildcard) {
+      logger.info(`yt2ptd listening on http://${bind}:${port} (all interfaces)`);
+      logger.info(`  local: http://127.0.0.1:${port}`);
+      const lanAddresses: string[] = [];
+      for (const ifaces of Object.values(networkInterfaces())) {
+        for (const iface of ifaces ?? []) {
+          if (iface.family === "IPv4" && !iface.internal) {
+            lanAddresses.push(iface.address);
+          }
+        }
+      }
+      for (const addr of lanAddresses) {
+        logger.info(`  lan:   http://${addr}:${port}`);
+      }
+    } else {
+      logger.info(`yt2ptd listening on http://${bind}:${port}`);
+    }
+    logger.info(`  config:   ${paths.configPath}`);
     logger.info(`  data_dir: ${paths.dataDir}`);
     logger.info(`  log_dir:  ${paths.logDir}`);
+    logger.info(`  bin_dir:  ${paths.binDir}`);
     logger.info(`  db:       ${paths.dataDir}/yt2pt.db`);
   } catch (err) {
     logger.error(`Failed to start server: ${err instanceof Error ? err.message : String(err)}`);

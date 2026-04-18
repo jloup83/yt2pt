@@ -2,7 +2,7 @@ import { execFile } from "node:child_process";
 import { mkdir, writeFile, readdir, rmdir } from "node:fs/promises";
 import { join, resolve, extname } from "node:path";
 import type { Config, Logger, ResolvedPaths } from "@yt2pt/shared";
-import { sanitize, formatDate } from "./paths";
+import { sanitize, formatDate, youtubeHandle } from "./paths";
 
 export interface DownloadResult {
   folderName: string;
@@ -10,7 +10,13 @@ export interface DownloadResult {
   outputDir: string;
 }
 
-function run(cmd: string, args: string[], signal?: AbortSignal): Promise<{ stdout: string; stderr: string }> {
+function run(
+  cmd: string,
+  args: string[],
+  signal?: AbortSignal,
+  log?: Logger,
+): Promise<{ stdout: string; stderr: string }> {
+  log?.debug(`$ ${shellQuote(cmd, args)}`);
   return new Promise((resolvePromise, reject) => {
     const child = execFile(cmd, args, { maxBuffer: 50 * 1024 * 1024, signal }, (error, stdout, stderr) => {
       if (error) {
@@ -27,6 +33,12 @@ function run(cmd: string, args: string[], signal?: AbortSignal): Promise<{ stdou
       signal.addEventListener("abort", () => { try { child.kill("SIGTERM"); } catch { /* noop */ } }, { once: true });
     }
   });
+}
+
+function shellQuote(cmd: string, args: string[]): string {
+  const q = (s: string): string =>
+    /^[A-Za-z0-9_./:@=+,-]+$/.test(s) ? s : `'${s.replace(/'/g, "'\\''")}'`;
+  return [cmd, ...args].map(q).join(" ");
 }
 
 function checkAborted(signal?: AbortSignal): void {
@@ -49,11 +61,12 @@ export async function runDownload(
   checkAborted(signal);
 
   log.info("Fetching video metadata...");
-  const { stdout } = await run(ytdlp, ["--dump-json", "--skip-download", url], signal);
+  const { stdout } = await run(ytdlp, ["--dump-json", "--skip-download", url], signal, log);
   const rawMeta = JSON.parse(stdout) as Record<string, unknown>;
   onProgress?.(10);
 
-  const channel = sanitize(rawMeta["channel"] as string);
+  const handle = youtubeHandle(rawMeta);
+  const channel = handle ? sanitize(handle) : sanitize(rawMeta["channel"] as string);
   const title = sanitize(rawMeta["title"] as string);
   const publishedDate = formatDate(rawMeta["upload_date"] as string);
   const videoId = rawMeta["id"] as string;
@@ -73,7 +86,7 @@ export async function runDownload(
     "--merge-output-format", config.ytdlp.merge_output_format,
     "-o", join(outputDir, videoFilename),
     url,
-  ], signal);
+  ], signal, log);
   onProgress?.(70);
 
   // Determine the actual video file extension
@@ -92,7 +105,7 @@ export async function runDownload(
       "--convert-thumbnails", config.ytdlp.thumbnail_format,
       "-o", join(outputDir, "thumbnail"),
       url,
-    ], signal);
+    ], signal, log);
     const entries = await readdir(outputDir);
     const thumb = entries.find((f) => f.startsWith("thumbnail") && f !== "thumbnail" && !f.endsWith(".part"));
     if (thumb) rawMeta["_thumbnail_file"] = thumb;
@@ -113,7 +126,7 @@ export async function runDownload(
       "--sub-format", "vtt",
       "-o", join(subtitlesDir, "%(id)s"),
       url,
-    ], signal);
+    ], signal, log);
     const entries = await readdir(subtitlesDir);
     const vttFiles = entries.filter((f) => f.endsWith(".vtt"));
     if (vttFiles.length === 0) {

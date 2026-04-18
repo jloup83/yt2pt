@@ -5,7 +5,7 @@ import { join, resolve } from "node:path";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import type { Logger } from "@yt2pt/shared";
-import { sanitize } from "../workers/paths";
+import { sanitize, youtubeHandle } from "../workers/paths";
 
 /**
  * Structured result for a single channel-info fetch.
@@ -63,17 +63,15 @@ export async function fetchChannelInfo(opts: FetchChannelInfoOptions): Promise<C
 
   opts.logger.info(`Fetching channel info: ${opts.channelUrl}`);
 
-  const stdout = await runYt(
-    opts.ytdlp,
-    [
-      "--dump-single-json",
-      "--flat-playlist",
-      "--playlist-items", "0",
-      "--no-warnings",
-      opts.channelUrl,
-    ],
-    opts.signal
-  );
+  const ytArgs = [
+    "--dump-single-json",
+    "--flat-playlist",
+    "--playlist-items", "0",
+    "--no-warnings",
+    opts.channelUrl,
+  ];
+  opts.logger.debug(`$ ${shellQuote(opts.ytdlp, ytArgs)}`);
+  const stdout = await runYt(opts.ytdlp, ytArgs, opts.signal);
 
   let meta: Record<string, unknown>;
   try {
@@ -88,7 +86,8 @@ export async function fetchChannelInfo(opts: FetchChannelInfoOptions): Promise<C
   if (!name) {
     throw new Error("yt-dlp channel JSON did not include channel/uploader/title");
   }
-  const slug = sanitize(name);
+  const handle = youtubeHandle(meta);
+  const slug = handle ? sanitize(handle) : sanitize(name);
   if (!slug) {
     throw new Error(`could not derive a non-empty slug from channel name "${name}"`);
   }
@@ -216,6 +215,12 @@ export function imageExtFromUrl(url: string): string | null {
 }
 
 // ── Default implementations ─────────────────────────────────────────
+
+function shellQuote(cmd: string, args: string[]): string {
+  const q = (s: string): string =>
+    /^[A-Za-z0-9_./:@=+,-]+$/.test(s) ? s : `'${s.replace(/'/g, "'\\''")}'`;
+  return [cmd, ...args].map(q).join(" ");
+}
 
 function defaultRunYtdlp(
   binary: string,

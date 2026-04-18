@@ -48,6 +48,30 @@ export function buildServer(ctx: ServerContext, opts: BuildServerOptions = {}): 
   // Decorate context onto the instance so route plugins can reach it.
   app.decorate("ctx", ctx);
 
+  // ── HTTP access log ──────────────────────────────────────────────
+  //
+  // One line per request: method, path, status, duration. Routed by
+  // status class: 2xx/3xx → info, 4xx → warn, 5xx → error. The SSE
+  // events stream is excluded because its responses are long-lived and
+  // would otherwise produce a stale entry per client. Static asset GETs
+  // (anything not under /api/) are logged at debug to avoid drowning
+  // the info stream when the SPA loads.
+  app.addHook("onRequest", async (req) => {
+    (req as unknown as { _t0: number })._t0 = Date.now();
+  });
+  app.addHook("onResponse", async (req, reply) => {
+    const url = req.raw.url ?? "";
+    if (url.startsWith("/api/events")) return;
+    const ms = Date.now() - ((req as unknown as { _t0?: number })._t0 ?? Date.now());
+    const status = reply.statusCode;
+    const line = `HTTP ${req.method} ${url} → ${status} (${ms}ms)`;
+    const isApi = url.startsWith("/api/");
+    if (status >= 500) ctx.logger.error(line);
+    else if (status >= 400) ctx.logger.warn(line);
+    else if (isApi) ctx.logger.info(line);
+    else ctx.logger.debug(line);
+  });
+
   // Basic liveness.
   app.get("/api/health", async () => ({
     status: "ok",

@@ -41,6 +41,20 @@ test("buildPeertubeChannelPayload derives slug + caps description", () => {
   assert.match(p.support, /Mirrored from https:\/\/www\.youtube\.com\/@CoolCreator/);
 });
 
+test("buildPeertubeChannelPayload uses uploader_id handle for slug, channel for displayName", () => {
+  // Mirrors a real yt-dlp dump for https://www.youtube.com/@hekima01
+  const meta = {
+    channel: "HEKIMA",
+    uploader: "HEKIMA",
+    uploader_id: "@hekima01",
+    uploader_url: "https://www.youtube.com/@hekima01",
+    channel_url: "https://www.youtube.com/channel/UChtdytjf7RxHcB8s2yb_AXg",
+  };
+  const p = buildPeertubeChannelPayload(meta);
+  assert.equal(p.name, "hekima01");
+  assert.equal(p.displayName, "HEKIMA");
+});
+
 test("buildPeertubeChannelPayload honours overrides and re-validates slug", () => {
   const meta = { channel: "Cool Creator" };
   const p = buildPeertubeChannelPayload(meta, {
