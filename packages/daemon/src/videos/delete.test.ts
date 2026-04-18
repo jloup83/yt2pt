@@ -33,7 +33,7 @@ function makeCtx(): {
   runMigrations(db);
   const paths: ResolvedPaths = {
     mode: "dev",
-    configPath: join(dir, "yt2pt.conf.toml"),
+    configPath: join(dir, "yt2pt.toml"),
     dataDir: dir,
     logDir: dir,
     binDir: dir,

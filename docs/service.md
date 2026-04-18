@@ -86,7 +86,7 @@ sudo systemctl edit yt2ptd.service
 
 ## Reloading the config
 
-After editing `/etc/yt2pt/yt2pt.conf.toml`:
+After editing `/etc/yt2pt/yt2pt.toml`:
 
 ```bash
 sudo systemctl restart yt2ptd.service

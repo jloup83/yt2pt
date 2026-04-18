@@ -28,7 +28,7 @@ function makeCtx() {
 
   const paths: ResolvedPaths = {
     mode: "dev",
-    configPath: "/tmp/yt2pt.conf.toml",
+    configPath: "/tmp/yt2pt.toml",
     dataDir: "/tmp",
     logDir: "/tmp",
     binDir: "/tmp",

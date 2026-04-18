@@ -47,12 +47,12 @@ function makeVideo(id: number): Video {
 
 function makeCtx(queue?: JobQueue): { ctx: ServerContext; cleanup: () => void } {
   const dir = mkdtempSync(join(tmpdir(), "yt2pt-events-"));
-  writeFileSync(join(dir, "yt2pt.conf.toml"), "", "utf-8");
+  writeFileSync(join(dir, "yt2pt.toml"), "", "utf-8");
   const db = new Database(":memory:");
   runMigrations(db);
   const logger = { error: () => {}, warn: () => {}, info: () => {}, debug: () => {} } as unknown as Logger;
   const paths: ResolvedPaths = {
-    mode: "dev", configPath: join(dir, "yt2pt.conf.toml"),
+    mode: "dev", configPath: join(dir, "yt2pt.toml"),
     dataDir: dir, logDir: dir, binDir: dir,
   };
   return {

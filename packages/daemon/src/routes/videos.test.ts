@@ -46,14 +46,14 @@ interface TestCtx {
 
 function makeCtx(): TestCtx {
   const dir = mkdtempSync(join(tmpdir(), "yt2pt-videos-"));
-  writeFileSync(join(dir, "yt2pt.conf.toml"), "", "utf-8");
+  writeFileSync(join(dir, "yt2pt.toml"), "", "utf-8");
   const db = new Database(":memory:");
   db.pragma("foreign_keys = ON");
   runMigrations(db);
   const logger = { error: () => {}, warn: () => {}, info: () => {}, debug: () => {} } as unknown as Logger;
   const paths: ResolvedPaths = {
     mode: "dev",
-    configPath: join(dir, "yt2pt.conf.toml"),
+    configPath: join(dir, "yt2pt.toml"),
     dataDir: dir,
     logDir: dir,
     binDir: dir,

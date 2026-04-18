@@ -1,18 +1,46 @@
 #!/usr/bin/env bash
 #
-# yt2pt installer (Linux, root-mode system install)
+# yt2pt installer
 #
-# Installs the yt2pt CLI and yt2ptd daemon to /usr/local, creates the
-# `yt2pt` system user and standard directories (/etc/yt2pt, /var/lib/yt2pt,
-# /var/log/yt2pt), installs the systemd unit, and reloads systemd.
+# Two modes:
+#   Production (default):
+#     Installs the yt2pt CLI and yt2ptd daemon to /usr/local, creates the
+#     `yt2pt` system user and standard directories (/etc/yt2pt, /var/lib/yt2pt,
+#     /var/log/yt2pt), installs the systemd unit, and reloads systemd.
+#     Requires root. Copies yt2pt.production.toml → /etc/yt2pt/yt2pt.toml.
 #
-# Idempotent: safe to re-run. Never overwrites an existing
-# /etc/yt2pt/yt2pt.conf.toml.
+#   Development (--development):
+#     Copies yt2pt.development.toml → yt2pt.toml in the repo root so the
+#     daemon can be run from source.  Does NOT require root.
 #
-# Usage:  sudo ./deploy/install.sh
+# Idempotent: safe to re-run. Never overwrites an existing yt2pt.toml.
+#
+# Usage:
+#   sudo ./deploy/install.sh              # production
+#   ./deploy/install.sh --development     # development
 #
 
 set -euo pipefail
+
+# --- parse arguments ---------------------------------------------------------
+
+INSTALL_MODE="production"
+for arg in "$@"; do
+  case "$arg" in
+    --development) INSTALL_MODE="development" ;;
+    --help|-h)
+      echo "Usage: $0 [--development]"
+      echo "  (default)       Production install (requires root)"
+      echo "  --development   Development setup (no root needed)"
+      exit 0
+      ;;
+    *)
+      echo "Unknown argument: $arg" >&2
+      echo "Usage: $0 [--development]" >&2
+      exit 1
+      ;;
+  esac
+done
 
 # --- constants ---------------------------------------------------------------
 
@@ -50,14 +78,62 @@ if [[ "$(uname -s)" != "Linux" ]]; then
   exit 1
 fi
 
-if [[ ${EUID} -ne 0 ]]; then
-  error "This installer must be run as root (try: sudo $0)."
-  exit 1
-fi
-
 # Repo root = parent of the directory containing this script.
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
+
+# ── Development mode: just copy config template and exit ─────────────────────
+
+if [[ "${INSTALL_MODE}" == "development" ]]; then
+  DEV_CONFIG="${REPO_ROOT}/yt2pt.toml"
+  DEV_TEMPLATE="${REPO_ROOT}/yt2pt.development.toml"
+
+  if [[ ! -f "${DEV_TEMPLATE}" ]]; then
+    error "Missing template: ${DEV_TEMPLATE}"
+    exit 1
+  fi
+
+  if [[ -e "${DEV_CONFIG}" ]]; then
+    info "Preserving existing config: ${DEV_CONFIG}"
+  else
+    info "Creating dev config: ${DEV_CONFIG}"
+    cp "${DEV_TEMPLATE}" "${DEV_CONFIG}"
+  fi
+
+  cat <<EOF
+
+${c_green}yt2pt development setup complete.${c_reset}
+
+  Config:       ${DEV_CONFIG}
+  Data dir:     ~/.local/share/yt2pt
+  Log dir:      ~/.local/share/yt2pt/logs
+
+  Edit your config:
+    \$EDITOR ${DEV_CONFIG}
+
+  Build the project:
+    npm ci && npm run build:all
+
+  Start the daemon:
+    npx yt2ptd
+
+  Use the CLI:
+    npx yt2pt status
+    npx yt2pt --help
+
+  Open the web UI:
+    http://localhost:8090
+
+EOF
+  exit 0
+fi
+
+# ── Production preflight ─────────────────────────────────────────────────────
+
+if [[ ${EUID} -ne 0 ]]; then
+  error "Production install must be run as root (try: sudo $0)."
+  exit 1
+fi
 
 # Required build artifacts.
 required_paths=(
@@ -67,7 +143,7 @@ required_paths=(
   "${REPO_ROOT}/packages/web/dist/index.html"
   "${REPO_ROOT}/node_modules"
   "${REPO_ROOT}/deploy/yt2ptd.service"
-  "${REPO_ROOT}/yt2pt.conf.example.toml"
+  "${REPO_ROOT}/yt2pt.production.toml"
 )
 missing=0
 for p in "${required_paths[@]}"; do
@@ -206,13 +282,13 @@ chmod 0755 "${BIN_DIR}/yt2ptd"
 
 # --- default config ----------------------------------------------------------
 
-CONFIG_FILE="${CONFIG_DIR}/yt2pt.conf.toml"
+CONFIG_FILE="${CONFIG_DIR}/yt2pt.toml"
 if [[ -e "${CONFIG_FILE}" ]]; then
   info "Preserving existing config: ${CONFIG_FILE}"
 else
   info "Installing default config: ${CONFIG_FILE}"
   install -m 0640 -o root -g "${SERVICE_GROUP}" \
-    "${REPO_ROOT}/yt2pt.conf.example.toml" "${CONFIG_FILE}"
+    "${REPO_ROOT}/yt2pt.production.toml" "${CONFIG_FILE}"
 fi
 
 # --- systemd unit ------------------------------------------------------------
@@ -231,17 +307,35 @@ cat <<EOF
 
 ${c_green}yt2pt installed successfully.${c_reset}
 
-Next steps:
-  1. Edit the config:
-       sudo \$EDITOR ${CONFIG_FILE}
-  2. Enable and start the daemon:
-       sudo systemctl enable --now ${SERVICE_NAME}
-  3. Check status:
-       sudo systemctl status ${SERVICE_NAME}
-       journalctl -u ${SERVICE_NAME} -f
-  4. Use the CLI:
-       yt2pt status
-       yt2pt --help
+  Paths:
+    Config:       ${CONFIG_FILE}
+    Data dir:     ${DATA_DIR}
+    Log dir:      ${LOG_DIR}
+    Binaries:     ${BIN_DIR}/yt2pt, ${BIN_DIR}/yt2ptd
+    App dir:      ${APP_DIR}
+    yt-dlp:       ${YTDLP_DIR}
+    Systemd unit: ${SYSTEMD_DIR}/${SERVICE_NAME}
 
-To uninstall:  sudo ${SCRIPT_DIR}/uninstall.sh
+  Edit the config:
+    sudo \$EDITOR ${CONFIG_FILE}
+
+  Service management:
+    sudo systemctl enable --now ${SERVICE_NAME}   # start + enable at boot
+    sudo systemctl stop ${SERVICE_NAME}            # stop
+    sudo systemctl restart ${SERVICE_NAME}         # restart
+    sudo systemctl status ${SERVICE_NAME}          # status
+
+  Logs:
+    journalctl -u ${SERVICE_NAME} -f               # live journal logs
+    tail -f ${LOG_DIR}/yt2ptd.log                   # log file
+
+  CLI:
+    yt2pt status
+    yt2pt --help
+
+  Web UI:
+    http://<host>:8090
+
+  Uninstall:
+    sudo ${SCRIPT_DIR}/uninstall.sh
 EOF

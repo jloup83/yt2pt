@@ -23,7 +23,8 @@ yt2pt/
 │   │   ├── src/commands/        #   one module per command
 │   │   └── src/output/          #   format, table, progress, time
 │   └── web/                     # @yt2pt/web — Vue 3 SPA (Vite)
-├── yt2pt.conf.example.toml
+├── yt2pt.production.toml
+├── yt2pt.development.toml
 ├── package.json                 # npm workspaces
 └── tsconfig.base.json
 ```
@@ -84,9 +85,9 @@ The CLI does no heavy lifting. It:
 
 Paths and config location depend on the "mode":
 
-- **root** — `/etc/yt2pt/yt2pt.conf.toml` exists (system install).
+- **root** — `/etc/yt2pt/yt2pt.toml` exists (system install).
 - **user** — Linux user-local fallback under XDG.
-- **dev** — macOS, or a `yt2pt.conf.toml` exists in the repo root.
+- **dev** — macOS, or a `yt2pt.toml` exists in the repo root.
 
 Precedence (highest wins): config file values > environment variables
 (`YT2PT_CONFIG`, `YT2PT_DATA_DIR`, `YT2PT_LOG_DIR`) > per-mode defaults.

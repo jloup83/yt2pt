@@ -117,7 +117,7 @@ test("checkAuth: false when no token", async () => {
 
 test("acquireToken: happy path writes token to config file", async () => {
   const dir = mkdtempSync(join(tmpdir(), "yt2pt-conn-"));
-  const cfgPath = join(dir, "yt2pt.conf.toml");
+  const cfgPath = join(dir, "yt2pt.toml");
 
   try {
     const cfg = baseConfig("");
@@ -152,7 +152,7 @@ test("acquireToken: happy path writes token to config file", async () => {
 
 test("acquireToken: returns error on bad credentials", async () => {
   const dir = mkdtempSync(join(tmpdir(), "yt2pt-conn-"));
-  const cfgPath = join(dir, "yt2pt.conf.toml");
+  const cfgPath = join(dir, "yt2pt.toml");
   try {
     const conn = new PeertubeConnection({
       config: baseConfig(""),

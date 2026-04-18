@@ -39,14 +39,14 @@ interface TestCtx {
 
 function makeCtx(): TestCtx {
   const dir = mkdtempSync(join(tmpdir(), "yt2pt-channels-"));
-  writeFileSync(join(dir, "yt2pt.conf.toml"), "", "utf-8");
+  writeFileSync(join(dir, "yt2pt.toml"), "", "utf-8");
   const db = new Database(":memory:");
   db.pragma("foreign_keys = ON");
   runMigrations(db);
   const logger = { error: () => {}, warn: () => {}, info: () => {}, debug: () => {} } as unknown as Logger;
   // binDir points at an empty dir → findYtDlpBinary throws inside POST and
   // name resolution is skipped (the row still gets inserted).
-  const paths: ResolvedPaths = { mode: "dev", configPath: join(dir, "yt2pt.conf.toml"), dataDir: dir, logDir: dir, binDir: join(dir, "empty-bin") };
+  const paths: ResolvedPaths = { mode: "dev", configPath: join(dir, "yt2pt.toml"), dataDir: dir, logDir: dir, binDir: join(dir, "empty-bin") };
   return {
     config: makeConfig(), paths, db, logger,
     cleanup: () => { db.close(); rmSync(dir, { recursive: true, force: true }); },

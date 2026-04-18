@@ -92,7 +92,7 @@ This creates the `yt2pt` system user, lays files under `/usr/local`,
 ### 4. Configure PeerTube credentials
 
 ```bash
-sudoedit /etc/yt2pt/yt2pt.conf.toml          # set instance_url
+sudoedit /etc/yt2pt/yt2pt.toml          # set instance_url
 yt2pt token <your-peertube-username> <your-password>
 ```
 
@@ -207,12 +207,13 @@ chmod +x bin/yt-dlp-linux-*
 
 ## PeerTube Authentication
 
-Before uploading videos, you need to configure your PeerTube credentials in `yt2pt.conf.toml`.
+Before uploading videos, you need to configure your PeerTube credentials in `yt2pt.toml`.
 
 ### 1. Create your config file
 
 ```bash
-cp yt2pt.conf.example.toml yt2pt.conf.toml
+./deploy/install.sh --development
+# or manually: cp yt2pt.development.toml yt2pt.toml
 ```
 
 Set your instance URL:
@@ -242,7 +243,7 @@ API="https://your-instance.example.com/api/v1" && \
     --data username="$USER" \
     --data-urlencode password="$PASS" \
     | jq -r .access_token) && \
-  sed -i.bak -E "s|^api_token = .*|api_token = \"$TOKEN\"|" yt2pt.conf.toml && rm yt2pt.conf.toml.bak && \
+  sed -i.bak -E "s|^api_token = .*|api_token = \"$TOKEN\"|" yt2pt.toml && rm yt2pt.toml.bak && \
   echo "Token set successfully"
 ```
 
@@ -266,7 +267,7 @@ API="https://your-instance.example.com/api/v1" && \
      | jq -r .access_token
    ```
 
-3. Copy the token into `yt2pt.conf.toml`:
+3. Copy the token into `yt2pt.toml`:
 
    ```toml
    [peertube]

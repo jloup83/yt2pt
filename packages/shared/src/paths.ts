@@ -29,7 +29,7 @@ function isDevMode(): boolean {
   if (process.platform !== "linux") return true;
   // On Linux, fall back to dev mode if a local config file is present
   // in the repo root (useful when running from a clone without install).
-  return existsSync(join(REPO_ROOT, "yt2pt.conf.toml"));
+  return existsSync(join(REPO_ROOT, "yt2pt.toml"));
 }
 
 // ── Mode detection ──────────────────────────────────────────────────
@@ -39,7 +39,7 @@ function detectMode(): PathMode {
   // System/root mode if the system config file exists. This covers both
   // the classic case (running as root) and a systemd service running as
   // a dedicated non-root user (e.g. `yt2pt`) that has no writable home.
-  if (existsSync("/etc/yt2pt/yt2pt.conf.toml")) return "root";
+  if (existsSync("/etc/yt2pt/yt2pt.toml")) return "root";
   const uid = typeof process.getuid === "function" ? process.getuid() : -1;
   return uid === 0 ? "root" : "user";
 }
@@ -50,7 +50,7 @@ function defaultsFor(mode: PathMode): Omit<ResolvedPaths, "mode"> {
   switch (mode) {
     case "root":
       return {
-        configPath: "/etc/yt2pt/yt2pt.conf.toml",
+        configPath: "/etc/yt2pt/yt2pt.toml",
         dataDir: "/var/lib/yt2pt",
         logDir: "/var/log/yt2pt",
         binDir: "/usr/local/lib/yt2pt/bin",
@@ -58,7 +58,7 @@ function defaultsFor(mode: PathMode): Omit<ResolvedPaths, "mode"> {
     case "user": {
       const home = homedir();
       return {
-        configPath: join(home, ".config", "yt2pt", "yt2pt.conf.toml"),
+        configPath: join(home, ".config", "yt2pt", "yt2pt.toml"),
         dataDir: join(home, ".local", "share", "yt2pt"),
         logDir: join(home, ".local", "share", "yt2pt", "logs"),
         binDir: join(home, ".local", "share", "yt2pt", "bin"),
@@ -67,7 +67,7 @@ function defaultsFor(mode: PathMode): Omit<ResolvedPaths, "mode"> {
     case "dev": {
       const home = homedir();
       return {
-        configPath: join(REPO_ROOT, "yt2pt.conf.toml"),
+        configPath: join(REPO_ROOT, "yt2pt.toml"),
         dataDir: join(home, ".local", "share", "yt2pt"),
         logDir: join(home, ".local", "share", "yt2pt", "logs"),
         binDir: join(REPO_ROOT, "bin"),

@@ -35,7 +35,7 @@ up an SSH tunnel / reverse proxy.
 ### Settings
 
 - Read-write view of the full config (sensitive fields redacted).
-- Edit and save → the daemon writes back to `yt2pt.conf.toml`.
+- Edit and save → the daemon writes back to `yt2pt.toml`.
 - **PeerTube token** — embedded login form that calls
   `POST /api/settings/token`; the new token replaces `api_token`
   atomically without restarting the daemon.

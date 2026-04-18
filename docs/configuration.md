@@ -1,15 +1,15 @@
 # Configuration reference
 
-The daemon loads `yt2pt.conf.toml` at startup. Location depends on the
+The daemon loads `yt2pt.toml` at startup. Location depends on the
 path mode (see [installation.md](installation.md)):
 
 | Mode | Path |
 |------|------|
-| root | `/etc/yt2pt/yt2pt.conf.toml` |
-| user | `~/.config/yt2pt/yt2pt.conf.toml` |
-| dev | `<repo>/yt2pt.conf.toml` |
+| root | `/etc/yt2pt/yt2pt.toml` |
+| user | `~/.config/yt2pt/yt2pt.toml` |
+| dev | `<repo>/yt2pt.toml` |
 
-Override with `YT2PT_CONFIG=/path/to/yt2pt.conf.toml`.
+Override with `YT2PT_CONFIG=/path/to/yt2pt.toml`.
 
 Changes take effect after a daemon restart (`sudo systemctl restart yt2ptd`).
 
