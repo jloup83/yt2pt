@@ -1,9 +1,3 @@
-node_modules/
-dist/
-**/dist/
-*.tsbuildinfo
-data/
 .DS_Store
-yt2pt.toml
-yt2pt.log
-yt2pt.conf.json
+downloads/
+list.txt
